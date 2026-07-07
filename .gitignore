@@ -1,0 +1,15 @@
+# Build output
+bin/
+dist/
+*.exe
+*.test
+
+# Go test coverage
+coverage.out
+*.coverprofile
+
+# Local editor and environment files
+.idea/
+.vscode/
+.env
+.env.*
