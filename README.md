@@ -12,9 +12,9 @@ go get github.com/go-kod/ko
 
 `ko` currently targets Go `1.27`, matching the module's `go.mod`.
 
-## Slice Chains
+## Seq Chains
 
-Start with `ko.Slice`, chain operations, then call `Collect` for the final slice. Slice chains are iterator-backed and can be ranged directly; lazy operations stay lazy until range, `Collect`, or a terminal/materializing method consumes them.
+Start with `ko.Slice`, chain operations on `ko.Seq[T]`, then call `Collect` for the final slice. `Seq[T]` is iterator-backed and can be ranged directly; lazy operations stay lazy until range, `Collect`, or a terminal/materializing method consumes them.
 
 ```go
 package main
@@ -40,37 +40,37 @@ func main() {
 }
 ```
 
-Slice methods:
+Seq methods:
 
 | Method | Returns | Notes |
 | --- | --- | --- |
 | `Collect()` | `[]T` | Returns the current slice. |
-| `Filter(predicate)` | slice chain | Keeps matching items. |
-| `Reject(predicate)` | slice chain | Drops matching items. |
-| `FilterReject(predicate)` | two slice chains | Returns matching and non-matching items. |
-| `Uniq()` | slice chain | Removes duplicate comparable items, keeping the first occurrence. Use `UniqBy` for non-comparable items. |
-| `UniqBy(mapper)` | slice chain | Removes duplicate items by a comparable key, keeping the first occurrence. |
-| `UniqMap(mapper)` | slice chain | Maps items and removes duplicate mapped values, keeping the first occurrence. |
-| `FindUniquesBy(mapper)` | slice chain | Keeps items whose mapped key appears exactly once. |
-| `FindDuplicatesBy(mapper)` | slice chain | Keeps the first item for each duplicated mapped key. |
-| `Map(mapper)` | slice chain | Changes item type. |
-| `FilterMap(mapper)` | slice chain | Maps items and keeps accepted results. |
-| `FlatMap(mapper)` | slice chain | Maps each item to zero or more items. |
-| `PartitionBy(mapper)` | `[][]T` | Groups items by key, preserving first key order. |
-| `ForEach(iteratee)` | slice chain | Calls the iteratee and keeps the chain unchanged. |
-| `ForEachWhile(predicate)` | slice chain | Calls the predicate until it returns false and keeps the chain unchanged. |
-| `Take(n)` | slice chain | Keeps the first `n` items. |
-| `TakeRight(n)` | slice chain | Keeps the last `n` items. |
-| `Subset(offset, length)` | slice chain | Keeps up to `length` items from `offset`. Negative offsets count from the end. |
-| `TakeWhile(predicate)` | slice chain | Keeps the leading items while the predicate is true. |
-| `TakeFilter(n, predicate)` | slice chain | Keeps the first `n` matching items. |
-| `TakeRightWhile(predicate)` | slice chain | Keeps the trailing items while the predicate is true. |
-| `Drop(n)` | slice chain | Drops the first `n` items. |
-| `DropRight(n)` | slice chain | Drops the last `n` items. |
-| `DropByIndex(indexes...)` | slice chain | Drops items by index. Negative indexes count from the end. |
-| `DropWhile(predicate)` | slice chain | Drops the leading items while the predicate is true. |
-| `DropRightWhile(predicate)` | slice chain | Drops the trailing items while the predicate is true. |
-| `Reverse()` | slice chain | Returns a reversed copy. |
+| `Filter(predicate)` | `Seq[T]` | Keeps matching items. |
+| `Reject(predicate)` | `Seq[T]` | Drops matching items. |
+| `FilterReject(predicate)` | `(Seq[T], Seq[T])` | Returns matching and non-matching items. |
+| `Uniq()` | `Seq[T]` | Removes duplicate comparable items, keeping the first occurrence. Use `UniqBy` for non-comparable items. |
+| `UniqBy(mapper)` | `Seq[T]` | Removes duplicate items by a comparable key, keeping the first occurrence. |
+| `UniqMap(mapper)` | `Seq[R]` | Maps items and removes duplicate mapped values, keeping the first occurrence. |
+| `FindUniquesBy(mapper)` | `Seq[T]` | Keeps items whose mapped key appears exactly once. |
+| `FindDuplicatesBy(mapper)` | `Seq[T]` | Keeps the first item for each duplicated mapped key. |
+| `Map(mapper)` | `Seq[R]` | Changes item type. |
+| `FilterMap(mapper)` | `Seq[R]` | Maps items and keeps accepted results. |
+| `FlatMap(mapper)` | `Seq[R]` | Maps each item to zero or more items. |
+| `PartitionBy(mapper)` | `iter.Seq[ko.Seq[T]]` | Groups items by key, preserving first key order. |
+| `ForEach(iteratee)` | `Seq[T]` | Calls the iteratee and keeps the chain unchanged. |
+| `ForEachWhile(predicate)` | `Seq[T]` | Calls the predicate until it returns false and keeps the chain unchanged. |
+| `Take(n)` | `Seq[T]` | Keeps the first `n` items. |
+| `TakeRight(n)` | `Seq[T]` | Keeps the last `n` items. |
+| `Subset(offset, length)` | `Seq[T]` | Keeps up to `length` items from `offset`. Negative offsets count from the end. |
+| `TakeWhile(predicate)` | `Seq[T]` | Keeps the leading items while the predicate is true. |
+| `TakeFilter(n, predicate)` | `Seq[T]` | Keeps the first `n` matching items. |
+| `TakeRightWhile(predicate)` | `Seq[T]` | Keeps the trailing items while the predicate is true. |
+| `Drop(n)` | `Seq[T]` | Drops the first `n` items. |
+| `DropRight(n)` | `Seq[T]` | Drops the last `n` items. |
+| `DropByIndex(indexes...)` | `Seq[T]` | Drops items by index. Negative indexes count from the end. |
+| `DropWhile(predicate)` | `Seq[T]` | Drops the leading items while the predicate is true. |
+| `DropRightWhile(predicate)` | `Seq[T]` | Drops the trailing items while the predicate is true. |
+| `Reverse()` | `Seq[T]` | Returns a reversed copy. |
 | `Reduce(accumulator, initial)` | `R` | Folds the slice into one value. |
 | `ReduceRight(accumulator, initial)` | `R` | Folds the slice from right to left. |
 | `Find(predicate)` | `(T, bool)` | Returns the first match and whether it was found. |
@@ -89,8 +89,9 @@ Slice methods:
 | `Count(predicate)` | `int` | Counts matching items. |
 | `Every(predicate)` | `bool` | Reports whether all items match. |
 | `ContainsBy(predicate)` | `bool` | Reports whether any item matches. |
-| `WithoutBy(mapper, exclude...)` | slice chain | Drops items whose mapped key is excluded. |
+| `WithoutBy(mapper, exclude...)` | `Seq[T]` | Drops items whose mapped key is excluded. |
 | `Chunk(n)` | `iter.Seq[ko.Seq[T]]` | Splits into chunks. `n <= 0` yields nothing. |
+| `Window(n)` | `iter.Seq[ko.Seq[T]]` | Splits into overlapping windows. `n <= 0` yields nothing. |
 
 ```go
 var chunks [][]int
@@ -115,6 +116,17 @@ sums := ko.Seq[ko.Seq[int]](ko.Slice([]int{1, 2, 3, 4, 5}).Chunk(2)).
 	Collect()
 
 // []int{3, 7}
+```
+
+`Window` has the same outer return shape, but each result overlaps the previous one.
+
+```go
+var windows [][]int
+for window := range ko.Slice([]int{1, 2, 3, 4}).Window(3) {
+	windows = append(windows, window.Collect())
+}
+
+// [][]int{{1, 2, 3}, {2, 3, 4}}
 ```
 
 ## Slice to Map
@@ -175,17 +187,17 @@ Seq2 methods:
 | `MapValues(mapper)` | `Seq2[K, RV]` | Changes values and keeps keys. |
 | `ForEach(iteratee)` | `Seq2[K, V]` | Calls the iteratee and keeps the chain unchanged. |
 | `ChunkEntries(n)` | `iter.Seq[ko.Seq2[K, V]]` | Splits entries into chunks. Map iteration order is not stable. `n <= 0` yields nothing. |
-| `Keys()` | slice chain | Returns map keys. Map iteration order is not stable. |
-| `FilterKeys(predicate)` | slice chain | Returns matching map keys. Map iteration order is not stable. |
-| `Values()` | slice chain | Returns map values. Map iteration order is not stable. |
-| `FilterValues(predicate)` | slice chain | Returns matching map values. Map iteration order is not stable. |
+| `Keys()` | `Seq[K]` | Returns map keys. Map iteration order is not stable. |
+| `FilterKeys(predicate)` | `Seq[K]` | Returns matching map keys. Map iteration order is not stable. |
+| `Values()` | `Seq[V]` | Returns map values. Map iteration order is not stable. |
+| `FilterValues(predicate)` | `Seq[V]` | Returns matching map values. Map iteration order is not stable. |
 | `Find(predicate)` | `(K, V, bool)` | Returns the first matching entry and whether it was found. Map iteration order is not stable. |
 | `Some(predicate)` | `bool` | Reports whether any entry matches. |
 | `None(predicate)` | `bool` | Reports whether no entry matches. |
 | `Count(predicate)` | `int` | Counts matching entries. |
 | `Every(predicate)` | `bool` | Reports whether all entries match. |
-| `ToSlice(mapper)` | slice chain | Converts entries to a slice chain. Map iteration order is not stable. |
-| `FilterMapToSlice(mapper)` | slice chain | Converts matching entries to a slice chain. Map iteration order is not stable. |
+| `ToSlice(mapper)` | `Seq[R]` | Converts entries to `Seq[R]`. Map iteration order is not stable. |
+| `FilterMapToSlice(mapper)` | `Seq[R]` | Converts matching entries to `Seq[R]`. Map iteration order is not stable. |
 
 ```go
 keys := ko.Map(map[string]int{"b": 2, "a": 1}).
@@ -210,6 +222,7 @@ sort.Strings(keys)
 ```sh
 go test ./...
 go test -cover ./...
+/home/pilot/sdk/go1.27rc1/bin/gofmt -w *.go
 ```
 
-Format Go files with the Go toolchain declared in `go.mod`.
+Format Go files with the Go toolchain declared in `go.mod`; older `gofmt` binaries do not parse Go 1.27 generic methods.

@@ -44,6 +44,16 @@ func ExampleSlice_chunk() {
 	// Output: [[1 2] [3 4] [5]]
 }
 
+func ExampleSlice_window() {
+	var got [][]int
+	for window := range ko.Slice([]int{1, 2, 3, 4}).Window(3) {
+		got = append(got, window.Collect())
+	}
+
+	fmt.Println(got)
+	// Output: [[1 2 3] [2 3 4]]
+}
+
 func ExampleSlice_takeRight() {
 	got := ko.Slice([]int{1, 2, 3, 4}).
 		TakeRight(2).

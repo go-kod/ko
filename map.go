@@ -10,13 +10,9 @@ func Map[K comparable, V any](collection map[K]V) Seq2[K, V] {
 	return Seq2[K, V](maps.All(collection))
 }
 
-func collectMap[K comparable, V any](seq iter.Seq2[K, V]) map[K]V {
-	return maps.Collect(seq)
-}
-
 // Collect returns the current map.
 func (c Seq2[K, V]) Collect() map[K]V {
-	return collectMap(iter.Seq2[K, V](c))
+	return maps.Collect(iter.Seq2[K, V](c))
 }
 
 // HasKey reports whether key exists in the map.
@@ -72,17 +68,33 @@ func (c Seq2[K, V]) OmitKeys(keys ...K) Seq2[K, V] {
 }
 
 // Assign merges maps into a new Seq2. Later maps replace earlier keys.
-func (c Seq2[K, V]) Assign(maps ...map[K]V) Seq2[K, V] {
+func (c Seq2[K, V]) Assign(others ...map[K]V) Seq2[K, V] {
 	return Seq2[K, V](func(yield func(K, V) bool) {
-		result := collectMap(iter.Seq2[K, V](c))
-		for _, items := range maps {
-			for key, value := range items {
-				result[key] = value
+		overrides := make(map[K]int)
+		for _, items := range others {
+			for key := range items {
+				overrides[key]++
 			}
 		}
-		for key, value := range result {
+
+		for key, value := range iter.Seq2[K, V](c) {
+			if overrides[key] > 0 {
+				continue
+			}
 			if !yield(key, value) {
 				return
+			}
+		}
+
+		for _, items := range others {
+			for key, value := range items {
+				overrides[key]--
+				if overrides[key] > 0 {
+					continue
+				}
+				if !yield(key, value) {
+					return
+				}
 			}
 		}
 	})

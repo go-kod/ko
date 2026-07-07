@@ -5,9 +5,10 @@
 This repository is a small Go module, `github.com/go-kod/ko`, that provides lodash-style generic helpers for Go collections.
 
 - Default to using the `grill-with-docs` and `tdd` skills when changing API shape, behavior, or tests.
-- `slice.go` contains `Seq`, the iterator-backed ordered-value chain type, and slice helper functions.
+- `slice.go` contains `Seq`, the iterator-backed ordered-value chain type, and sequence helper functions.
 - `map.go` contains `Seq2`, the iterator-backed key/value chain type, and map helper functions.
-- `slice_test.go` contains the current unit tests for both slice and Seq2 chains.
+- `slice_test.go` contains the current unit tests for Seq chains.
+- `map_test.go` contains the current unit tests for Seq2 chains.
 - `README.md` documents public usage examples.
 
 Keep new source files at the repository root unless a real package split becomes necessary. Public API changes should be reflected in `README.md`.
@@ -15,9 +16,9 @@ Keep new source files at the repository root unless a real package split becomes
 ## Build, Test, and Development Commands
 
 - `go test ./...` runs all tests in the module.
-- `go test -run TestSliceChainHelpers` runs one targeted test.
+- `go test -run TestSeq2 ./...` runs one targeted test group.
 - `go test -cover ./...` reports package coverage.
-- `gofmt -w *.go` formats Go files in the current flat layout.
+- `/home/pilot/sdk/go1.27rc1/bin/gofmt -w *.go` formats Go files with the module's Go 1.27 toolchain.
 
 The module currently targets Go `1.27` with toolchain `go1.27rc1`, as declared in `go.mod`.
 
@@ -25,15 +26,15 @@ The module currently targets Go `1.27` with toolchain `go1.27rc1`, as declared i
 
 Use standard Go formatting via `gofmt`; tabs are expected for indentation in Go files. Keep package name `ko`. Prefer small, direct generic helpers over new abstractions. Ordered collection chains should use `Seq[T]`, a defined type over `iter.Seq[T]`; key/value collection chains should use `Seq2[K, V]`, a defined type over `iter.Seq2[K, V]`. Public collection operations should be reached through exported constructors and methods such as `Slice`, `Map`, `Collect`, and `Filter`.
 
-Name chain methods as short verbs that match collection operations, such as `Map`, `Filter`, `Reject`, `Reduce`, `Take`, and `Drop`. Internal helpers should stay unexported and lower camel case, for example `mapSlice` and `flatMap`.
+Name chain methods as short verbs that match collection operations, such as `Map`, `Filter`, `Reject`, `Reduce`, `Take`, and `Drop`. Internal helpers should stay unexported and lower camel case, for example `mapSeq` and `flatMapSeq`.
 
 Collection operations should be exposed as chain methods, not package-level helper functions. Keep package-level exported functions limited to chain constructors such as `Slice` and `Map`; do not add top-level helpers like `Uniq(collection)` when the operation belongs on `Slice(...).Uniq()` or `Map(...).Keys()`.
 
-Avoid intermediate chain types and conversion-only helpers such as `chunkChain`, grouped Seq2 types, `sliceFromSeq`, or `mapFromSeq`. Return `Seq[T]`, `Seq2[K, V]`, or raw `iter.Seq`/`iter.Seq2` directly when Go 1.27 generic-method instantiation cycles require it, as with `Chunk` and grouped sequence results.
+Avoid intermediate chain types and conversion-only helpers such as `chunkChain`, grouped Seq2 types, `sliceFromSeq`, or `mapFromSeq`. Return `Seq[T]`, `Seq2[K, V]`, or raw `iter.Seq`/`iter.Seq2` directly when Go 1.27 generic-method instantiation cycles require it, as with `Chunk`, `Window`, and grouped sequence results.
 
 ## Testing Guidelines
 
-Use Go's standard `testing` package. Place tests in `*_test.go` files in package `ko`, and name tests `Test<FeatureOrMethod>`, as in `TestSliceChainToMap`.
+Use Go's standard `testing` package. Place tests in `*_test.go` files in package `ko`, and name new tests with current public vocabulary, such as `TestSeqWindow` or `TestSeq2ChunkEntries`.
 
 For map-to-slice behavior, sort results before comparison because Go map iteration order is not stable. Use focused table tests only when they reduce repetition; otherwise keep tests simple and readable.
 

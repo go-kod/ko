@@ -285,6 +285,26 @@ func TestSeq2Assign(t *testing.T) {
 	}
 }
 
+func TestSeq2AssignStopsEarly(t *testing.T) {
+	calls := 0
+	for key, value := range Seq2[string, int](func(yield func(string, int) bool) {
+		calls++
+		if !yield("a", 1) {
+			return
+		}
+		calls++
+		yield("b", 2)
+	}).Assign(map[string]int{"b": 20}) {
+		if key != "a" || value != 1 {
+			t.Fatalf("entry: %q %d", key, value)
+		}
+		break
+	}
+	if calls != 1 {
+		t.Fatalf("calls: %d", calls)
+	}
+}
+
 func TestSeq2Keys(t *testing.T) {
 	got := Map(map[string]int{"b": 2, "a": 1}).Keys().Collect()
 	sort.Strings(got)

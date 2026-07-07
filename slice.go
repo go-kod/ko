@@ -116,8 +116,27 @@ func (c Seq[T]) GroupByMap[K comparable, V any](mapper func(item T, index int) (
 }
 
 // PartitionBy groups items by key, preserving first key order.
-func (c Seq[T]) PartitionBy[K comparable](mapper func(item T, index int) K) [][]T {
-	return partitionBy(collectSeq(iter.Seq[T](c)), mapper)
+func (c Seq[T]) PartitionBy[K comparable](mapper func(item T, index int) K) iter.Seq[Seq[T]] {
+	return func(yield func(Seq[T]) bool) {
+		groups := make([][]T, 0)
+		seen := make(map[K]int)
+		i := 0
+		for item := range iter.Seq[T](c) {
+			key := mapper(item, i)
+			if index, ok := seen[key]; ok {
+				groups[index] = append(groups[index], item)
+			} else {
+				seen[key] = len(groups)
+				groups = append(groups, []T{item})
+			}
+			i++
+		}
+		for _, group := range groups {
+			if !yield(Seq[T](slices.Values(group))) {
+				return
+			}
+		}
+	}
 }
 
 // KeyBy indexes items by a key. Later items replace earlier items with the same key.
@@ -171,6 +190,17 @@ func (c Seq[T]) Chunk(n int) iter.Seq[Seq[T]] {
 	return func(yield func(Seq[T]) bool) {
 		for chunk := range chunkSeq(iter.Seq[T](c), n) {
 			if !yield(Seq[T](slices.Values(chunk))) {
+				return
+			}
+		}
+	}
+}
+
+// Window splits items into overlapping windows of size n.
+func (c Seq[T]) Window(n int) iter.Seq[Seq[T]] {
+	return func(yield func(Seq[T]) bool) {
+		for window := range windowSeq(iter.Seq[T](c), n) {
+			if !yield(Seq[T](slices.Values(window))) {
 				return
 			}
 		}
@@ -564,6 +594,27 @@ func chunkSeq[T any](seq iter.Seq[T], n int) iter.Seq[[]T] {
 	}
 }
 
+func windowSeq[T any](seq iter.Seq[T], n int) iter.Seq[[]T] {
+	return func(yield func([]T) bool) {
+		if n <= 0 {
+			return
+		}
+		window := make([]T, 0, n)
+		for item := range seq {
+			window = append(window, item)
+			if len(window) < n {
+				continue
+			}
+			if !yield(append([]T(nil), window...)) {
+				return
+			}
+			// ponytail: copy-shift is enough; switch to a ring buffer if large windows matter.
+			copy(window, window[1:])
+			window = window[:n-1]
+		}
+	}
+}
+
 func takeSeq[T any](seq iter.Seq[T], n int) iter.Seq[T] {
 	return func(yield func(T) bool) {
 		if n <= 0 {
@@ -757,21 +808,6 @@ func findDuplicatesBy[T any, K comparable](collection []T, mapper func(item T, i
 		}
 		added[key] = struct{}{}
 		result = append(result, item)
-	}
-	return result
-}
-
-func partitionBy[T any, K comparable](collection []T, mapper func(item T, index int) K) [][]T {
-	result := make([][]T, 0)
-	seen := make(map[K]int)
-	for i, item := range collection {
-		key := mapper(item, i)
-		if index, ok := seen[key]; ok {
-			result[index] = append(result[index], item)
-			continue
-		}
-		seen[key] = len(result)
-		result = append(result, []T{item})
 	}
 	return result
 }

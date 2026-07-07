@@ -5,7 +5,7 @@ This context names the public collection-chain concepts exposed by `ko`.
 ## Language
 
 **Seq**:
-A public chaining concept over an ordered iterator that materializes to a slice. `Seq[T]` is the canonical ordered-value chain type; raw `iter.Seq` is used when Go generic-method cycles prevent returning `Seq`, such as the outer stream from chunking.
+A public chaining concept over an ordered iterator that materializes to a slice. `Seq[T]` is the canonical ordered-value chain type; raw `iter.Seq` is used when Go generic-method cycles prevent returning `Seq`, such as the outer stream from chunking or windowing.
 _Avoid_: SliceChain, ListChain, ChunkChain, slice helper, top-level collection helper
 
 **Seq2**:

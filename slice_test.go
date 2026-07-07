@@ -898,14 +898,38 @@ func TestSliceChainGroupByMap(t *testing.T) {
 }
 
 func TestSliceChainPartitionBy(t *testing.T) {
-	got := Slice([]string{"go", "kod", "ko", "go-kod"}).
+	got := [][]string{}
+	for group := range Slice([]string{"go", "kod", "ko", "go-kod"}).
 		PartitionBy(func(item string, _ int) int {
 			return len(item)
-		})
+		}) {
+		got = append(got, group.Collect())
+	}
 
 	want := [][]string{{"go", "ko"}, {"kod"}, {"go-kod"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %#v, want %#v", got, want)
+	}
+}
+
+func TestSliceChainPartitionByIsLazyUntilConsumed(t *testing.T) {
+	calls := 0
+	groups := Slice([]string{"go", "kod", "ko"}).
+		PartitionBy(func(item string, _ int) int {
+			calls++
+			return len(item)
+		})
+	if calls != 0 {
+		t.Fatalf("partitionBy called before consumption: %d", calls)
+	}
+	for group := range groups {
+		if got := group.Collect(); !reflect.DeepEqual(got, []string{"go", "ko"}) {
+			t.Fatalf("group: %#v", got)
+		}
+		break
+	}
+	if calls != 3 {
+		t.Fatalf("partitionBy calls: %d", calls)
 	}
 }
 
@@ -1047,5 +1071,53 @@ func TestSliceChainChunkStopsEarly(t *testing.T) {
 func TestSliceChainChunkZeroSizeYieldsNothing(t *testing.T) {
 	for chunk := range Slice([]int{1, 2, 3}).Chunk(0) {
 		t.Fatalf("unexpected chunk: %#v", chunk.Collect())
+	}
+}
+
+func TestSliceChainWindow(t *testing.T) {
+	var got [][]int
+	for window := range Slice([]int{1, 2, 3, 4}).Window(3) {
+		got = append(got, window.Collect())
+	}
+
+	want := [][]int{{1, 2, 3}, {2, 3, 4}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %#v, want %#v", got, want)
+	}
+}
+
+func TestSliceChainWindowOuterCanBeChainedByConversion(t *testing.T) {
+	got := Seq[Seq[int]](Slice([]int{1, 2, 3, 4}).Window(3)).
+		Map(func(window Seq[int], _ int) int {
+			items := window.Collect()
+			return items[0] + items[2]
+		}).
+		Collect()
+
+	want := []int{4, 6}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %#v, want %#v", got, want)
+	}
+}
+
+func TestSliceChainWindowStopsEarly(t *testing.T) {
+	calls := 0
+	for window := range Slice([]int{1, 2, 3, 4}).Map(func(item int, _ int) int {
+		calls++
+		return item
+	}).Window(3) {
+		if got := window.Collect(); !reflect.DeepEqual(got, []int{1, 2, 3}) {
+			t.Fatalf("window: %#v", got)
+		}
+		break
+	}
+	if calls != 3 {
+		t.Fatalf("calls: %d", calls)
+	}
+}
+
+func TestSliceChainWindowZeroSizeYieldsNothing(t *testing.T) {
+	for window := range Slice([]int{1, 2, 3}).Window(0) {
+		t.Fatalf("unexpected window: %#v", window.Collect())
 	}
 }
