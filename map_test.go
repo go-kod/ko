@@ -23,6 +23,35 @@ func TestSeq2(t *testing.T) {
 	}
 }
 
+func TestSeq2CollectEmptyReturnsEmptyMap(t *testing.T) {
+	got := Map(map[string]int{}).Collect()
+	if got == nil || len(got) != 0 {
+		t.Fatalf("got %#v", got)
+	}
+
+	got = Map(map[string]int{"a": 1}).PickKeys().Collect()
+	if got == nil || len(got) != 0 {
+		t.Fatalf("picked none: %#v", got)
+	}
+}
+
+func TestSeq2CollectDuplicateKeysKeepLast(t *testing.T) {
+	got := Seq2[string, int](func(yield func(string, int) bool) {
+		if !yield("x", 1) {
+			return
+		}
+		if !yield("x", 2) {
+			return
+		}
+		yield("y", 3)
+	}).Collect()
+
+	want := map[string]int{"x": 2, "y": 3}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %#v, want %#v", got, want)
+	}
+}
+
 func TestSeq2ToSlice(t *testing.T) {
 	got := Map(map[string]int{"a": 1, "b": 2}).
 		MapValues(func(_ string, value int) string {
@@ -137,10 +166,11 @@ func TestSeq2LazyOperationsStopEarly(t *testing.T) {
 
 	filterKeysCalls := 0
 	for range Map(map[string]int{"a": 1, "b": 2}).
-		FilterKeys(func(_ string, _ int) bool {
+		Filter(func(_ string, _ int) bool {
 			filterKeysCalls++
 			return true
-		}) {
+		}).
+		Keys() {
 		break
 	}
 	if filterKeysCalls != 1 {
@@ -149,10 +179,11 @@ func TestSeq2LazyOperationsStopEarly(t *testing.T) {
 
 	filterValuesCalls := 0
 	for range Map(map[string]int{"a": 1, "b": 2}).
-		FilterValues(func(_ string, _ int) bool {
+		Filter(func(_ string, _ int) bool {
 			filterValuesCalls++
 			return true
-		}) {
+		}).
+		Values() {
 		break
 	}
 	if filterValuesCalls != 1 {
@@ -245,6 +276,7 @@ func TestSeq2ChunkEntriesStopsEarly(t *testing.T) {
 
 func TestSeq2ChunkEntriesCountsDuplicateKeysAsEntries(t *testing.T) {
 	chunks := []map[string]int{}
+	var firstChunkValues []int
 	for chunk := range Seq2[string, int](func(yield func(string, int) bool) {
 		if !yield("x", 1) {
 			return
@@ -254,7 +286,34 @@ func TestSeq2ChunkEntriesCountsDuplicateKeysAsEntries(t *testing.T) {
 		}
 		yield("y", 3)
 	}).ChunkEntries(2) {
+		if len(chunks) == 0 {
+			for key, value := range chunk {
+				if key != "x" {
+					t.Fatalf("first chunk key: %q", key)
+				}
+				firstChunkValues = append(firstChunkValues, value)
+			}
+		}
 		chunks = append(chunks, chunk.Collect())
+	}
+
+	if !reflect.DeepEqual(firstChunkValues, []int{1, 2}) {
+		t.Fatalf("first chunk values: %#v", firstChunkValues)
+	}
+
+	for chunk := range Seq2[string, int](func(yield func(string, int) bool) {
+		if !yield("x", 1) {
+			return
+		}
+		yield("x", 2)
+	}).ChunkEntries(2) {
+		for _, value := range chunk {
+			if value != 1 {
+				t.Fatalf("first chunk value: %d", value)
+			}
+			break
+		}
+		break
 	}
 
 	want := []map[string]int{{"x": 2}, {"y": 3}}
@@ -305,6 +364,21 @@ func TestSeq2AssignStopsEarly(t *testing.T) {
 	}
 }
 
+func TestSeq2AssignLaterMapsReplaceEarlierMaps(t *testing.T) {
+	seen := 0
+	for key, value := range Map(map[string]int{}).
+		Assign(map[string]int{"a": 1}, map[string]int{"a": 2}) {
+		seen++
+		if key != "a" || value != 2 {
+			t.Fatalf("entry: %q %d", key, value)
+		}
+		break
+	}
+	if seen != 1 {
+		t.Fatalf("seen: %d", seen)
+	}
+}
+
 func TestSeq2Keys(t *testing.T) {
 	got := Map(map[string]int{"b": 2, "a": 1}).Keys().Collect()
 	sort.Strings(got)
@@ -325,11 +399,12 @@ func TestSeq2Values(t *testing.T) {
 	}
 }
 
-func TestSeq2FilterKeys(t *testing.T) {
+func TestSeq2FilterThenKeys(t *testing.T) {
 	got := Map(map[string]int{"a": 1, "bb": 2, "ccc": 3}).
-		FilterKeys(func(key string, value int) bool {
+		Filter(func(key string, value int) bool {
 			return len(key) == value
 		}).
+		Keys().
 		Collect()
 	sort.Strings(got)
 
@@ -339,20 +414,22 @@ func TestSeq2FilterKeys(t *testing.T) {
 	}
 
 	got = Map(map[string]int{"a": 2}).
-		FilterKeys(func(key string, value int) bool {
+		Filter(func(key string, value int) bool {
 			return len(key) == value
 		}).
+		Keys().
 		Collect()
 	if len(got) != 0 {
-		t.Fatalf("filterKeys miss: %#v", got)
+		t.Fatalf("filter then keys miss: %#v", got)
 	}
 }
 
-func TestSeq2FilterValues(t *testing.T) {
+func TestSeq2FilterThenValues(t *testing.T) {
 	got := Map(map[string]int{"a": 1, "bb": 2, "ccc": 4}).
-		FilterValues(func(key string, value int) bool {
+		Filter(func(key string, value int) bool {
 			return len(key) == value
 		}).
+		Values().
 		Collect()
 	sort.Ints(got)
 
@@ -362,12 +439,13 @@ func TestSeq2FilterValues(t *testing.T) {
 	}
 
 	got = Map(map[string]int{"a": 2}).
-		FilterValues(func(key string, value int) bool {
+		Filter(func(key string, value int) bool {
 			return len(key) == value
 		}).
+		Values().
 		Collect()
 	if len(got) != 0 {
-		t.Fatalf("filterValues miss: %#v", got)
+		t.Fatalf("filter then values miss: %#v", got)
 	}
 }
 
@@ -405,6 +483,18 @@ func TestSeq2PickKeys(t *testing.T) {
 	if len(got) != 0 {
 		t.Fatalf("pick none: %#v", got)
 	}
+
+	calls := 0
+	got = Seq2[string, int](func(yield func(string, int) bool) {
+		calls++
+		yield("a", 1)
+	}).PickKeys().Collect()
+	if len(got) != 0 {
+		t.Fatalf("pick none seq: %#v", got)
+	}
+	if calls != 0 {
+		t.Fatalf("pick none calls: %d", calls)
+	}
 }
 
 func TestSeq2OmitKeys(t *testing.T) {
@@ -422,9 +512,39 @@ func TestSeq2OmitKeys(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("omit none: %#v", got)
 	}
+
+	for key, value := range Map(map[string]int{"a": 1, "b": 2}).OmitKeys("b") {
+		if key != "a" || value != 1 {
+			t.Fatalf("omit entry: %q %d", key, value)
+		}
+		break
+	}
 }
 
 func TestSeq2Predicates(t *testing.T) {
+	if Map(map[string]int{"a": 1}).IsEmpty() {
+		t.Fatal("isEmpty non-empty")
+	}
+
+	if !Map(map[string]int{}).IsEmpty() {
+		t.Fatal("isEmpty empty")
+	}
+
+	calls := 0
+	empty := Seq2[string, int](func(yield func(string, int) bool) {
+		calls++
+		if !yield("a", 1) {
+			return
+		}
+		yield("b", 2)
+	}).IsEmpty()
+	if empty {
+		t.Fatal("isEmpty seq non-empty")
+	}
+	if calls != 1 {
+		t.Fatalf("isEmpty should stop after first entry, calls: %d", calls)
+	}
+
 	if got := Map(map[string]int{"a": 1, "b": 2}).Some(func(_ string, value int) bool {
 		return value == 2
 	}); !got {
@@ -437,13 +557,13 @@ func TestSeq2Predicates(t *testing.T) {
 		t.Fatal("every: false")
 	}
 
-	if got := Map(map[string]int{"a": 1, "b": 2}).None(func(_ string, value int) bool {
+	if got := !Map(map[string]int{"a": 1, "b": 2}).Some(func(_ string, value int) bool {
 		return value > 9
 	}); !got {
 		t.Fatal("none: false")
 	}
 
-	if got := Map(map[string]int{"a": 1, "b": 2}).None(func(_ string, value int) bool {
+	if got := !Map(map[string]int{"a": 1, "b": 2}).Some(func(_ string, value int) bool {
 		return value == 2
 	}); got {
 		t.Fatal("none hit: true")
@@ -488,11 +608,27 @@ func TestSeq2MoreHelpers(t *testing.T) {
 	}
 
 	sum := 0
-	Map(map[string]int{"a": 1, "b": 2}).ForEach(func(_ string, value int) {
+	seq := Map(map[string]int{"a": 1, "b": 2}).ForEach(func(_ string, value int) {
 		sum += value
 	})
+	if sum != 0 {
+		t.Fatalf("forEach should be lazy: %d", sum)
+	}
+	if got := seq.Collect(); !reflect.DeepEqual(got, map[string]int{"a": 1, "b": 2}) {
+		t.Fatalf("forEach value: %#v", got)
+	}
 	if sum != 3 {
 		t.Fatalf("forEach: %d", sum)
+	}
+
+	sum = 0
+	for range Map(map[string]int{"a": 1, "b": 2}).ForEach(func(_ string, value int) {
+		sum += value
+	}) {
+		break
+	}
+	if sum == 0 || sum == 3 {
+		t.Fatalf("forEach should stop after one entry, sum: %d", sum)
 	}
 
 	if got := Map(map[string]int{"a": 1}).Some(func(_ string, value int) bool {

@@ -8,8 +8,8 @@ import (
 	"github.com/go-kod/ko"
 )
 
-func ExampleSlice() {
-	got := ko.Slice([]int{1, 2, 2, 3, 4}).
+func ExampleOf() {
+	got := ko.Of(1, 2, 2, 3, 4).
 		Uniq().
 		Filter(func(item int, _ int) bool {
 			return item%2 == 0
@@ -46,7 +46,7 @@ func ExampleSlice_chunk() {
 
 func ExampleSlice_window() {
 	var got [][]int
-	for window := range ko.Slice([]int{1, 2, 3, 4}).Window(3) {
+	for window := range ko.Slice([]int{1, 2, 3, 4}).Window(3, 1) {
 		got = append(got, window.Collect())
 	}
 

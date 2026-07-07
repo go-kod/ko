@@ -5,8 +5,9 @@
 This repository is a small Go module, `github.com/go-kod/ko`, that provides lodash-style generic helpers for Go collections.
 
 - Default to using the `grill-with-docs` and `tdd` skills when changing API shape, behavior, or tests.
-- `slice.go` contains `Seq`, the iterator-backed ordered-value chain type, and sequence helper functions.
-- `map.go` contains `Seq2`, the iterator-backed key/value chain type, and map helper functions.
+- `seq.go` contains the public `Seq` and `Seq2` iterator-backed sequence types.
+- `slice.go` contains ordered-value sequence constructors and `Seq` methods.
+- `map.go` contains key/value sequence constructors and `Seq2` methods.
 - `slice_test.go` contains the current unit tests for Seq chains.
 - `map_test.go` contains the current unit tests for Seq2 chains.
 - `README.md` documents public usage examples.
@@ -24,11 +25,11 @@ The module currently targets Go `1.27` with toolchain `go1.27rc1`, as declared i
 
 ## Coding Style & Naming Conventions
 
-Use standard Go formatting via `gofmt`; tabs are expected for indentation in Go files. Keep package name `ko`. Prefer small, direct generic helpers over new abstractions. Ordered collection chains should use `Seq[T]`, a defined type over `iter.Seq[T]`; key/value collection chains should use `Seq2[K, V]`, a defined type over `iter.Seq2[K, V]`. Public collection operations should be reached through exported constructors and methods such as `Slice`, `Map`, `Collect`, and `Filter`.
+Use standard Go formatting via `gofmt`; tabs are expected for indentation in Go files. Keep package name `ko`. Prefer small, direct generic helpers over new abstractions. Ordered collection chains should use `Seq[T]`, a defined type over `iter.Seq[T]`; key/value collection chains should use `Seq2[K, V]`, a defined type over `iter.Seq2[K, V]`. Public collection operations should be reached through exported constructors and methods such as `Slice`, `Of`, `Generate`, `Map`, `Range`, `Collect`, and `Filter`.
 
 Name chain methods as short verbs that match collection operations, such as `Map`, `Filter`, `Reject`, `Reduce`, `Take`, and `Drop`. Internal helpers should stay unexported and lower camel case, for example `mapSeq` and `flatMapSeq`.
 
-Collection operations should be exposed as chain methods, not package-level helper functions. Keep package-level exported functions limited to chain constructors such as `Slice` and `Map`; do not add top-level helpers like `Uniq(collection)` when the operation belongs on `Slice(...).Uniq()` or `Map(...).Keys()`.
+Collection operations should be exposed as chain methods, not package-level helper functions. Keep package-level exported functions limited to chain constructors such as `Slice`, `Of`, `Generate`, `Map`, `Range`, `RangeStep`, `Times`, `Repeat`, and `FromChannel`; do not add top-level helpers like `Uniq(collection)` when the operation belongs on `Slice(...).Uniq()` or `Map(...).Keys()`.
 
 Avoid intermediate chain types and conversion-only helpers such as `chunkChain`, grouped Seq2 types, `sliceFromSeq`, or `mapFromSeq`. Return `Seq[T]`, `Seq2[K, V]`, or raw `iter.Seq`/`iter.Seq2` directly when Go 1.27 generic-method instantiation cycles require it, as with `Chunk`, `Window`, and grouped sequence results.
 

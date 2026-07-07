@@ -5,65 +5,64 @@ import (
 	"maps"
 )
 
-// Map starts a chain over collection.
+// Map returns a Seq2 over collection.
 func Map[K comparable, V any](collection map[K]V) Seq2[K, V] {
 	return Seq2[K, V](maps.All(collection))
 }
 
-// Collect returns the current map.
+// Collect materializes the entries into a map.
 func (c Seq2[K, V]) Collect() map[K]V {
 	return maps.Collect(iter.Seq2[K, V](c))
 }
 
 // HasKey reports whether key exists in the map.
 func (c Seq2[K, V]) HasKey(key K) bool {
-	for itemKey := range iter.Seq2[K, V](c) {
-		if itemKey == key {
-			return true
-		}
-	}
-	return false
+	_, _, ok := c.Find(func(itemKey K, _ V) bool {
+		return itemKey == key
+	})
+	return ok
 }
 
 // ValueOr returns the value for key, or fallback when key is absent.
 func (c Seq2[K, V]) ValueOr(key K, fallback V) V {
-	for itemKey, value := range iter.Seq2[K, V](c) {
-		if itemKey == key {
-			return value
-		}
+	_, value, ok := c.Find(func(itemKey K, _ V) bool {
+		return itemKey == key
+	})
+	if !ok {
+		return fallback
 	}
-	return fallback
+	return value
 }
 
 // PickKeys keeps entries whose key is listed.
 func (c Seq2[K, V]) PickKeys(keys ...K) Seq2[K, V] {
+	if len(keys) == 0 {
+		return Seq2[K, V](func(yield func(K, V) bool) {})
+	}
 	keep := make(map[K]struct{}, len(keys))
 	for _, key := range keys {
 		keep[key] = struct{}{}
 	}
 
-	return Seq2[K, V](func(yield func(K, V) bool) {
-		for key, value := range iter.Seq2[K, V](c) {
-			if _, ok := keep[key]; ok && !yield(key, value) {
-				return
-			}
-		}
+	return c.Filter(func(key K, _ V) bool {
+		_, ok := keep[key]
+		return ok
 	})
 }
 
 // OmitKeys drops entries whose key is listed.
 func (c Seq2[K, V]) OmitKeys(keys ...K) Seq2[K, V] {
+	if len(keys) == 0 {
+		return c
+	}
 	drop := make(map[K]struct{}, len(keys))
 	for _, key := range keys {
 		drop[key] = struct{}{}
 	}
 
-	return Seq2[K, V](func(yield func(K, V) bool) {
-		for key, value := range iter.Seq2[K, V](c) {
-			if _, ok := drop[key]; !ok && !yield(key, value) {
-				return
-			}
-		}
+	return c.Filter(func(key K, _ V) bool {
+		_, ok := drop[key]
+		return !ok
 	})
 }
 
@@ -132,101 +131,91 @@ func (c Seq2[K, V]) Map[RK comparable, RV any](mapper func(key K, value V) (RK, 
 
 // MapKeys transforms keys and keeps values.
 func (c Seq2[K, V]) MapKeys[RK comparable](mapper func(key K, value V) RK) Seq2[RK, V] {
-	return Seq2[RK, V](func(yield func(RK, V) bool) {
-		for key, value := range iter.Seq2[K, V](c) {
-			if !yield(mapper(key, value), value) {
-				return
-			}
-		}
+	return c.Map(func(key K, value V) (RK, V) {
+		return mapper(key, value), value
 	})
 }
 
 // MapValues transforms values and keeps keys.
 func (c Seq2[K, V]) MapValues[RV any](mapper func(key K, value V) RV) Seq2[K, RV] {
-	return Seq2[K, RV](func(yield func(K, RV) bool) {
-		for key, value := range iter.Seq2[K, V](c) {
-			if !yield(key, mapper(key, value)) {
-				return
-			}
-		}
+	return c.Map(func(key K, value V) (K, RV) {
+		return key, mapper(key, value)
 	})
 }
 
-// ForEach calls iteratee for each entry and returns the unchanged chain.
+// ForEach calls iteratee for each entry and returns the unchanged Seq2.
 func (c Seq2[K, V]) ForEach(iteratee func(key K, value V)) Seq2[K, V] {
-	for key, value := range iter.Seq2[K, V](c) {
-		iteratee(key, value)
-	}
-	return c
-}
-
-// Keys returns the map keys as a slice chain. Map iteration order is Go map order.
-func (c Seq2[K, V]) Keys() Seq[K] {
-	return Seq[K](func(yield func(K) bool) {
-		for key := range iter.Seq2[K, V](c) {
-			if !yield(key) {
+	return Seq2[K, V](func(yield func(K, V) bool) {
+		for key, value := range iter.Seq2[K, V](c) {
+			iteratee(key, value)
+			if !yield(key, value) {
 				return
 			}
 		}
 	})
 }
 
-// ChunkEntries splits map entries into Seq2 chunks of size n. Map iteration order is Go map order.
+// Keys returns the entry keys as a Seq. Map-backed sources use Go map order.
+func (c Seq2[K, V]) Keys() Seq[K] {
+	return c.ToSlice(func(key K, _ V) K {
+		return key
+	})
+}
+
+// ChunkEntries splits entries into Seq2 chunks of size n. Map-backed sources use Go map order.
 func (c Seq2[K, V]) ChunkEntries(n int) iter.Seq[Seq2[K, V]] {
 	return func(yield func(Seq2[K, V]) bool) {
 		if n <= 0 {
 			return
 		}
-		chunk := make(map[K]V, n)
-		count := 0
+		chunk := make([]struct {
+			key   K
+			value V
+		}, 0, n)
+		emit := func() bool {
+			entries := append([]struct {
+				key   K
+				value V
+			}(nil), chunk...)
+			return yield(Seq2[K, V](func(yield func(K, V) bool) {
+				for _, entry := range entries {
+					if !yield(entry.key, entry.value) {
+						return
+					}
+				}
+			}))
+		}
+
 		for key, value := range iter.Seq2[K, V](c) {
-			chunk[key] = value
-			count++
-			if count < n {
+			chunk = append(chunk, struct {
+				key   K
+				value V
+			}{key: key, value: value})
+			if len(chunk) < n {
 				continue
 			}
-			if !yield(Seq2[K, V](maps.All(chunk))) {
+			if !emit() {
 				return
 			}
-			chunk = make(map[K]V, n)
-			count = 0
+			chunk = chunk[:0]
 		}
-		if count > 0 {
-			yield(Seq2[K, V](maps.All(chunk)))
+		if len(chunk) > 0 {
+			emit()
 		}
 	}
 }
 
-// FilterKeys returns matching keys as a slice chain. Map iteration order is Go map order.
-func (c Seq2[K, V]) FilterKeys(predicate func(key K, value V) bool) Seq[K] {
-	return Seq[K](func(yield func(K) bool) {
-		for key, value := range iter.Seq2[K, V](c) {
-			if predicate(key, value) && !yield(key) {
-				return
-			}
-		}
-	})
-}
-
-// Values returns the map values as a slice chain. Map iteration order is Go map order.
+// Values returns the entry values as a Seq. Map-backed sources use Go map order.
 func (c Seq2[K, V]) Values() Seq[V] {
-	return Seq[V](func(yield func(V) bool) {
-		for _, value := range iter.Seq2[K, V](c) {
-			if !yield(value) {
-				return
-			}
-		}
+	return c.ToSlice(func(_ K, value V) V {
+		return value
 	})
 }
 
-// FilterValues returns matching values as a slice chain. Map iteration order is Go map order.
-func (c Seq2[K, V]) FilterValues(predicate func(key K, value V) bool) Seq[V] {
-	return Seq[V](func(yield func(V) bool) {
-		for key, value := range iter.Seq2[K, V](c) {
-			if predicate(key, value) && !yield(value) {
-				return
-			}
-		}
+// IsEmpty reports whether the sequence yields no entries.
+func (c Seq2[K, V]) IsEmpty() bool {
+	return !c.Some(func(_ K, _ V) bool {
+		return true
 	})
 }
 
@@ -234,12 +223,6 @@ func (c Seq2[K, V]) FilterValues(predicate func(key K, value V) bool) Seq[V] {
 func (c Seq2[K, V]) Some(predicate func(key K, value V) bool) bool {
 	_, _, ok := c.Find(predicate)
 	return ok
-}
-
-// None reports whether no entry matches predicate.
-func (c Seq2[K, V]) None(predicate func(key K, value V) bool) bool {
-	_, _, ok := c.Find(predicate)
-	return !ok
 }
 
 // Count returns the number of entries matching predicate.
@@ -255,12 +238,9 @@ func (c Seq2[K, V]) Count(predicate func(key K, value V) bool) int {
 
 // Every reports whether all entries match predicate.
 func (c Seq2[K, V]) Every(predicate func(key K, value V) bool) bool {
-	for key, value := range iter.Seq2[K, V](c) {
-		if !predicate(key, value) {
-			return false
-		}
-	}
-	return true
+	return !c.Some(func(key K, value V) bool {
+		return !predicate(key, value)
+	})
 }
 
 // Find returns the first matching entry. Map iteration order is Go map order.
@@ -275,7 +255,7 @@ func (c Seq2[K, V]) Find(predicate func(key K, value V) bool) (K, V, bool) {
 	return zeroKey, zeroValue, false
 }
 
-// ToSlice transforms the map into a slice chain. Map iteration order is Go map order.
+// ToSlice transforms entries into a Seq. Map-backed sources use Go map order.
 func (c Seq2[K, V]) ToSlice[R any](mapper func(key K, value V) R) Seq[R] {
 	return Seq[R](func(yield func(R) bool) {
 		for key, value := range iter.Seq2[K, V](c) {
@@ -286,7 +266,7 @@ func (c Seq2[K, V]) ToSlice[R any](mapper func(key K, value V) R) Seq[R] {
 	})
 }
 
-// FilterMapToSlice transforms matching entries into a slice chain. Map iteration order is Go map order.
+// FilterMapToSlice transforms matching entries into a Seq. Map-backed sources use Go map order.
 func (c Seq2[K, V]) FilterMapToSlice[R any](mapper func(key K, value V) (R, bool)) Seq[R] {
 	return Seq[R](func(yield func(R) bool) {
 		for key, value := range iter.Seq2[K, V](c) {
