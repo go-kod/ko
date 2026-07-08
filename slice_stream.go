@@ -1,13 +1,12 @@
 package ko
 
 import (
+	"cmp"
 	"iter"
-	"reflect"
 	"slices"
-	"strings"
 )
 
-// Methods in this file can yield while consuming the source.
+// Methods in this file return intermediate sequences.
 
 // Filter keeps items for which predicate returns true.
 func (c Seq[T]) Filter(predicate func(item T, index int) bool) Seq[T] {
@@ -26,13 +25,6 @@ func (c Seq[T]) Filter(predicate func(item T, index int) bool) Seq[T] {
 func (c Seq[T]) Reject(predicate func(item T, index int) bool) Seq[T] {
 	return c.Filter(func(item T, index int) bool {
 		return !predicate(item, index)
-	})
-}
-
-// Compact drops zero-value items.
-func (c Seq[T]) Compact() Seq[T] {
-	return c.Filter(func(item T, _ int) bool {
-		return !reflect.ValueOf(&item).Elem().IsZero()
 	})
 }
 
@@ -100,34 +92,24 @@ func (c Seq[T]) FilterReject(predicate func(item T, index int) bool) (Seq[T], Se
 		})
 }
 
-// Uniq removes duplicate comparable items, keeping the first occurrence.
-func (c Seq[T]) Uniq() Seq[T] {
-	return Seq[T](uniqSeq(iter.Seq[T](c)))
-}
-
 // UniqBy removes duplicate items by key, keeping the first occurrence.
 func (c Seq[T]) UniqBy[K comparable](mapper func(item T, index int) K) Seq[T] {
 	return Seq[T](uniqBySeq(iter.Seq[T](c), mapper))
 }
 
-// IsUniqBy reports whether all mapped keys are unique.
-func (c Seq[T]) IsUniqBy[K comparable](mapper func(item T, index int) K) bool {
-	seen := make(map[K]struct{})
-	i := 0
-	for item := range iter.Seq[T](c) {
-		key := mapper(item, i)
-		if _, ok := seen[key]; ok {
-			return false
-		}
-		seen[key] = struct{}{}
-		i++
-	}
-	return true
-}
-
 // UniqMap maps items and keeps the first occurrence of each mapped value.
 func (c Seq[T]) UniqMap[R comparable](mapper func(item T, index int) R) Seq[R] {
 	return Seq[R](uniqMapSeq(iter.Seq[T](c), mapper))
+}
+
+// FindUniquesBy keeps items whose mapped key appears exactly once.
+func (c Seq[T]) FindUniquesBy[K comparable](mapper func(item T, index int) K) Seq[T] {
+	return Seq[T](findUniquesBySeq(iter.Seq[T](c), mapper))
+}
+
+// FindDuplicatesBy keeps the first item for each duplicated mapped key.
+func (c Seq[T]) FindDuplicatesBy[K comparable](mapper func(item T, index int) K) Seq[T] {
+	return Seq[T](findDuplicatesBySeq(iter.Seq[T](c), mapper))
 }
 
 // Map transforms items and may change the element type.
@@ -192,6 +174,96 @@ func (c Seq[T]) KeyBy[K comparable](mapper func(item T, index int) K) Seq2[K, T]
 			key := mapper(item, i)
 			i++
 			if !yield(key, item) {
+				return
+			}
+		}
+	})
+}
+
+// GroupBy groups items by key, preserving first key order.
+func (c Seq[T]) GroupBy[K comparable](mapper func(item T, index int) K) iter.Seq2[K, Seq[T]] {
+	return func(yield func(K, Seq[T]) bool) {
+		result := make(map[K][]T)
+		order := make([]K, 0)
+		i := 0
+		for item := range iter.Seq[T](c) {
+			key := mapper(item, i)
+			if _, ok := result[key]; !ok {
+				order = append(order, key)
+			}
+			result[key] = append(result[key], item)
+			i++
+		}
+		for _, key := range order {
+			if !yield(key, Seq[T](slices.Values(result[key]))) {
+				return
+			}
+		}
+	}
+}
+
+// GroupByMap groups mapped values by key, preserving first key order.
+func (c Seq[T]) GroupByMap[K comparable, V any](mapper func(item T, index int) (K, V)) iter.Seq2[K, Seq[V]] {
+	return func(yield func(K, Seq[V]) bool) {
+		result := make(map[K][]V)
+		order := make([]K, 0)
+		i := 0
+		for item := range iter.Seq[T](c) {
+			key, value := mapper(item, i)
+			if _, ok := result[key]; !ok {
+				order = append(order, key)
+			}
+			result[key] = append(result[key], value)
+			i++
+		}
+		for _, key := range order {
+			if !yield(key, Seq[V](slices.Values(result[key]))) {
+				return
+			}
+		}
+	}
+}
+
+// PartitionBy groups items by key, preserving first key order.
+func (c Seq[T]) PartitionBy[K comparable](mapper func(item T, index int) K) iter.Seq[Seq[T]] {
+	return func(yield func(Seq[T]) bool) {
+		groups := make([][]T, 0)
+		seen := make(map[K]int)
+		i := 0
+		for item := range iter.Seq[T](c) {
+			key := mapper(item, i)
+			if index, ok := seen[key]; ok {
+				groups[index] = append(groups[index], item)
+			} else {
+				seen[key] = len(groups)
+				groups = append(groups, []T{item})
+			}
+			i++
+		}
+		for _, group := range groups {
+			if !yield(Seq[T](slices.Values(group))) {
+				return
+			}
+		}
+	}
+}
+
+// CountBy counts items by key, preserving first key order.
+func (c Seq[T]) CountBy[K comparable](mapper func(item T, index int) K) Seq2[K, int] {
+	return Seq2[K, int](func(yield func(K, int) bool) {
+		result := make(map[K]int)
+		order := make([]K, 0)
+		i := 0
+		for item := range iter.Seq[T](c) {
+			key := mapper(item, i)
+			if _, ok := result[key]; !ok {
+				order = append(order, key)
+			}
+			result[key]++
+			i++
+		}
+		for _, key := range order {
+			if !yield(key, result[key]) {
 				return
 			}
 		}
@@ -302,6 +374,57 @@ func (c Seq[T]) Take(n int) Seq[T] {
 	})
 }
 
+// TakeRight keeps the last n items.
+func (c Seq[T]) TakeRight(n int) Seq[T] {
+	return Seq[T](func(yield func(T) bool) {
+		if n <= 0 {
+			return
+		}
+		items := c.Collect()
+		if n < len(items) {
+			items = items[len(items)-n:]
+		}
+		for item := range Slice(items) {
+			if !yield(item) {
+				return
+			}
+		}
+	})
+}
+
+// Subset returns up to length items starting at offset. Negative offsets count from the end.
+func (c Seq[T]) Subset(offset, length int) Seq[T] {
+	if offset >= 0 {
+		return Seq[T](func(yield func(T) bool) {
+			if length <= 0 {
+				return
+			}
+			i := 0
+			taken := 0
+			for item := range iter.Seq[T](c) {
+				if i < offset {
+					i++
+					continue
+				}
+				if !yield(item) {
+					return
+				}
+				taken++
+				if taken >= length {
+					return
+				}
+			}
+		})
+	}
+	return Seq[T](func(yield func(T) bool) {
+		for item := range Slice(subset(c.Collect(), offset, length)) {
+			if !yield(item) {
+				return
+			}
+		}
+	})
+}
+
 // TakeWhile keeps items from the beginning while predicate returns true.
 func (c Seq[T]) TakeWhile(predicate func(item T, index int) bool) Seq[T] {
 	return Seq[T](func(yield func(T) bool) {
@@ -311,6 +434,17 @@ func (c Seq[T]) TakeWhile(predicate func(item T, index int) bool) Seq[T] {
 				return
 			}
 			i++
+		}
+	})
+}
+
+// TakeRightWhile keeps items from the end while predicate returns true.
+func (c Seq[T]) TakeRightWhile(predicate func(item T, index int) bool) Seq[T] {
+	return Seq[T](func(yield func(T) bool) {
+		for item := range Slice(takeRightWhile(c.Collect(), predicate)) {
+			if !yield(item) {
+				return
+			}
 		}
 	})
 }
@@ -327,6 +461,38 @@ func (c Seq[T]) Drop(n int) Seq[T] {
 			if !yield(item) {
 				return
 			}
+		}
+	})
+}
+
+// DropByIndex drops items by index. Negative indexes count from the end.
+func (c Seq[T]) DropByIndex(indexes ...int) Seq[T] {
+	for _, index := range indexes {
+		if index < 0 {
+			return Seq[T](func(yield func(T) bool) {
+				for item := range Slice(dropByIndex(c.Collect(), indexes...)) {
+					if !yield(item) {
+						return
+					}
+				}
+			})
+		}
+	}
+	drop := make(map[int]struct{}, len(indexes))
+	for _, index := range indexes {
+		drop[index] = struct{}{}
+	}
+	return Seq[T](func(yield func(T) bool) {
+		i := 0
+		for item := range iter.Seq[T](c) {
+			if _, ok := drop[i]; ok {
+				i++
+				continue
+			}
+			if !yield(item) {
+				return
+			}
+			i++
 		}
 	})
 }
@@ -356,6 +522,17 @@ func (c Seq[T]) DropRight(n int) Seq[T] {
 	})
 }
 
+// DropRightWhile drops items from the end while predicate returns true.
+func (c Seq[T]) DropRightWhile(predicate func(item T, index int) bool) Seq[T] {
+	return Seq[T](func(yield func(T) bool) {
+		for item := range Slice(dropRightWhile(c.Collect(), predicate)) {
+			if !yield(item) {
+				return
+			}
+		}
+	})
+}
+
 // DropWhile drops items from the beginning while predicate returns true.
 func (c Seq[T]) DropWhile(predicate func(item T, index int) bool) Seq[T] {
 	return Seq[T](func(yield func(T) bool) {
@@ -375,40 +552,6 @@ func (c Seq[T]) DropWhile(predicate func(item T, index int) bool) Seq[T] {
 	})
 }
 
-// Reduce folds collection into one value.
-func (c Seq[T]) Reduce[R any](accumulator func(agg R, item T, index int) R, initial R) R {
-	result := initial
-	i := 0
-	for item := range iter.Seq[T](c) {
-		result = accumulator(result, item, i)
-		i++
-	}
-	return result
-}
-
-// Join maps items to strings and joins them with sep.
-func (c Seq[T]) Join(sep string, mapper func(item T, index int) string) string {
-	var builder strings.Builder
-	i := 0
-	first := true
-	for item := range iter.Seq[T](c) {
-		if !first {
-			builder.WriteString(sep)
-		}
-		first = false
-		builder.WriteString(mapper(item, i))
-		i++
-	}
-	return builder.String()
-}
-
-// IsEmpty reports whether the sequence yields no items.
-func (c Seq[T]) IsEmpty() bool {
-	return !c.Some(func(_ T, _ int) bool {
-		return true
-	})
-}
-
 // Scan returns the running accumulation, including the initial value.
 func (c Seq[T]) Scan[R any](accumulator func(agg R, item T, index int) R, initial R) Seq[R] {
 	return Seq[R](func(yield func(R) bool) {
@@ -424,55 +567,6 @@ func (c Seq[T]) Scan[R any](accumulator func(agg R, item T, index int) R, initia
 				return
 			}
 		}
-	})
-}
-
-// Some reports whether any item matches predicate.
-func (c Seq[T]) Some(predicate func(item T, index int) bool) bool {
-	_, _, ok := findSeq(iter.Seq[T](c), predicate)
-	return ok
-}
-
-// Count returns the number of items matching predicate.
-func (c Seq[T]) Count(predicate func(item T, index int) bool) int {
-	result := 0
-	i := 0
-	for item := range iter.Seq[T](c) {
-		if predicate(item, i) {
-			result++
-		}
-		i++
-	}
-	return result
-}
-
-// Every reports whether all items match predicate.
-func (c Seq[T]) Every(predicate func(item T, index int) bool) bool {
-	return !c.Some(func(item T, index int) bool {
-		return !predicate(item, index)
-	})
-}
-
-// None reports whether no item matches predicate.
-func (c Seq[T]) None(predicate func(item T, index int) bool) bool {
-	return !c.Some(predicate)
-}
-
-// Find returns the first matching item.
-func (c Seq[T]) Find(predicate func(item T, index int) bool) (T, bool) {
-	item, _, ok := findSeq(iter.Seq[T](c), predicate)
-	return item, ok
-}
-
-// FindIndex returns the first matching item, its index, and whether it was found.
-func (c Seq[T]) FindIndex(predicate func(item T, index int) bool) (T, int, bool) {
-	return findSeq(iter.Seq[T](c), predicate)
-}
-
-// First returns the first item.
-func (c Seq[T]) First() (T, bool) {
-	return c.Find(func(_ T, _ int) bool {
-		return true
 	})
 }
 
@@ -505,20 +599,49 @@ func (c Seq[T]) ToMap[K comparable, V any](mapper func(item T, index int) (K, V)
 	})
 }
 
-func uniqSeq[T any](seq iter.Seq[T]) iter.Seq[T] {
-	return func(yield func(T) bool) {
-		seen := map[any]struct{}{}
-		for item := range seq {
-			key := any(item)
-			if _, ok := seen[key]; ok {
-				continue
-			}
-			seen[key] = struct{}{}
+// Sort returns a stably sorted copy using compare.
+func (c Seq[T]) Sort(compare func(left, right T) int) Seq[T] {
+	return Seq[T](func(yield func(T) bool) {
+		for item := range Slice(slices.SortedStableFunc(iter.Seq[T](c), compare)) {
 			if !yield(item) {
 				return
 			}
 		}
-	}
+	})
+}
+
+// SortBy returns a stably sorted copy using mapped ordered keys.
+func (c Seq[T]) SortBy[K cmp.Ordered](mapper func(item T, index int) K) Seq[T] {
+	return Seq[T](func(yield func(T) bool) {
+		type entry struct {
+			item T
+			key  K
+		}
+		items := c.Collect()
+		entries := make([]entry, 0, len(items))
+		for i, item := range items {
+			entries = append(entries, entry{item: item, key: mapper(item, i)})
+		}
+		slices.SortStableFunc(entries, func(left, right entry) int {
+			return cmp.Compare(left.key, right.key)
+		})
+		for _, entry := range entries {
+			if !yield(entry.item) {
+				return
+			}
+		}
+	})
+}
+
+// Reverse returns a reversed copy.
+func (c Seq[T]) Reverse() Seq[T] {
+	return Seq[T](func(yield func(T) bool) {
+		for _, item := range slices.Backward(c.Collect()) {
+			if !yield(item) {
+				return
+			}
+		}
+	})
 }
 
 func uniqBySeq[T any, K comparable](seq iter.Seq[T], mapper func(item T, index int) K) iter.Seq[T] {
@@ -551,6 +674,52 @@ func uniqMapSeq[T any, R comparable](seq iter.Seq[T], mapper func(item T, index 
 			}
 			seen[mapped] = struct{}{}
 			if !yield(mapped) {
+				return
+			}
+		}
+	}
+}
+
+func findUniquesBySeq[T any, K comparable](seq iter.Seq[T], mapper func(item T, index int) K) iter.Seq[T] {
+	return func(yield func(T) bool) {
+		counts := make(map[K]int)
+		first := make(map[K]T)
+		order := make([]K, 0)
+		i := 0
+		for item := range seq {
+			key := mapper(item, i)
+			if _, ok := counts[key]; !ok {
+				first[key] = item
+				order = append(order, key)
+			}
+			counts[key]++
+			i++
+		}
+		for _, key := range order {
+			if counts[key] == 1 && !yield(first[key]) {
+				return
+			}
+		}
+	}
+}
+
+func findDuplicatesBySeq[T any, K comparable](seq iter.Seq[T], mapper func(item T, index int) K) iter.Seq[T] {
+	return func(yield func(T) bool) {
+		counts := make(map[K]int)
+		first := make(map[K]T)
+		order := make([]K, 0)
+		i := 0
+		for item := range seq {
+			key := mapper(item, i)
+			if _, ok := counts[key]; !ok {
+				first[key] = item
+				order = append(order, key)
+			}
+			counts[key]++
+			i++
+		}
+		for _, key := range order {
+			if counts[key] > 1 && !yield(first[key]) {
 				return
 			}
 		}
@@ -610,14 +779,58 @@ func windowSeq[T any](seq iter.Seq[T], n, step int) iter.Seq[[]T] {
 	}
 }
 
-func findSeq[T any](seq iter.Seq[T], predicate func(item T, index int) bool) (T, int, bool) {
-	i := 0
-	for item := range seq {
-		if predicate(item, i) {
-			return item, i, true
-		}
-		i++
+func subset[T any](collection []T, offset, length int) []T {
+	if length <= 0 {
+		return []T{}
 	}
-	var zero T
-	return zero, -1, false
+	offset += len(collection)
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= len(collection) {
+		return []T{}
+	}
+
+	end := offset + length
+	if end > len(collection) {
+		end = len(collection)
+	}
+	return collection[offset:end]
+}
+
+func takeRightWhile[T any](collection []T, predicate func(item T, index int) bool) []T {
+	for i, item := range slices.Backward(collection) {
+		if !predicate(item, i) {
+			return collection[i+1:]
+		}
+	}
+	return collection
+}
+
+func dropByIndex[T any](collection []T, indexes ...int) []T {
+	drop := make(map[int]struct{}, len(indexes))
+	for _, index := range indexes {
+		if index < 0 {
+			index += len(collection)
+		}
+		if index >= 0 && index < len(collection) {
+			drop[index] = struct{}{}
+		}
+	}
+
+	i := -1
+	return slices.DeleteFunc(collection, func(T) bool {
+		i++
+		_, ok := drop[i]
+		return ok
+	})
+}
+
+func dropRightWhile[T any](collection []T, predicate func(item T, index int) bool) []T {
+	for i, item := range slices.Backward(collection) {
+		if !predicate(item, i) {
+			return collection[:i+1]
+		}
+	}
+	return []T{}
 }

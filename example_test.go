@@ -2,6 +2,9 @@ package ko_test
 
 import (
 	"fmt"
+	"iter"
+	"maps"
+	"slices"
 	"sort"
 	"strconv"
 
@@ -9,8 +12,7 @@ import (
 )
 
 func ExampleOf() {
-	got := ko.Of(1, 2, 2, 3, 4).
-		Uniq().
+	got := ko.Uniq(ko.Of(1, 2, 2, 3, 4)).
 		Filter(func(item int, _ int) bool {
 			return item%2 == 0
 		}).
@@ -32,6 +34,17 @@ func ExampleSlice_uniqBy() {
 
 	fmt.Println(got)
 	// Output: [go kod]
+}
+
+func ExampleSeq_standardLibraryInterop() {
+	items := slices.Collect(iter.Seq[int](ko.Range(1, 4)))
+	entries := maps.Collect(iter.Seq2[string, int](ko.Map(map[string]int{"a": 1})))
+
+	fmt.Println(items)
+	fmt.Println(entries["a"])
+	// Output:
+	// [1 2 3]
+	// 1
 }
 
 func ExampleSlice_chunk() {

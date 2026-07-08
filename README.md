@@ -14,7 +14,7 @@ go get github.com/go-kod/ko
 
 ## Seq Chains
 
-Start with `ko.Slice`, `ko.Of`, `ko.Empty`, `ko.Generate`, `ko.Range`, `ko.RangeStep`, `ko.Times`, `ko.Repeat`, or `ko.FromChannel`, chain operations on `ko.Seq[T]`, then call `Collect` for the final slice. `Seq[T]` is iterator-backed and can be ranged directly; lazy operations stay lazy until range, `Collect`, or a terminal/materializing method consumes them.
+Start with `ko.Slice`, `ko.Of`, `ko.Empty`, `ko.Generate`, `ko.Range`, `ko.RangeStep`, `ko.Times`, `ko.Repeat`, or `ko.FromChannel`, chain operations on `ko.Seq[T]`, then call `Collect` for the final slice. `Seq[T]` is iterator-backed and can be ranged directly or converted to `iter.Seq[T]` for standard helpers such as `slices.Collect`; lazy operations stay lazy until range, `Collect`, or a terminal/materializing method consumes them.
 
 ```go
 package main
@@ -47,9 +47,7 @@ Seq methods:
 | `Collect()` | `[]T` | Materializes the sequence into a slice. |
 | `Filter(predicate)` | `Seq[T]` | Keeps matching items. |
 | `Reject(predicate)` | `Seq[T]` | Drops matching items. |
-| `Compact()` | `Seq[T]` | Drops zero-value items. |
 | `FilterReject(predicate)` | `(Seq[T], Seq[T])` | Returns matching and non-matching items. |
-| `Uniq()` | `Seq[T]` | Removes duplicate comparable items, keeping the first occurrence. Use `UniqBy` for non-comparable items. |
 | `UniqBy(mapper)` | `Seq[T]` | Removes duplicate items by a comparable key, keeping the first occurrence. |
 | `IsUniqBy(mapper)` | `bool` | Reports whether all mapped keys are unique. |
 | `UniqMap(mapper)` | `Seq[R]` | Maps items and removes duplicate mapped values, keeping the first occurrence. |
@@ -138,6 +136,28 @@ for window := range ko.Slice([]int{1, 2, 3, 4}).Window(3, 1) {
 // [][]int{{1, 2, 3}, {2, 3, 4}}
 ```
 
+## Comparable Helpers
+
+These top-level helpers require comparable items, so invalid element types fail at compile time.
+
+| Function | Returns | Notes |
+| --- | --- | --- |
+| `Uniq(seq)` | `Seq[T]` | Keeps first occurrences. |
+| `Distinct(seq)` | `Seq[T]` | Keeps first occurrences. |
+| `Compact(seq)` | `Seq[T]` | Drops zero values. |
+| `Without(seq, values...)` | `Seq[T]` | Drops listed values. |
+| `Contains(seq, value)` | `bool` | Reports whether value exists. |
+| `IndexOf(seq, value)` | `(int, bool)` | Returns the first index. |
+| `LastIndexOf(seq, value)` | `(int, bool)` | Returns the last index. |
+| `CountValues(seq)` | `map[T]int` | Counts each value. |
+| `ToSet(seq)` | `map[T]struct{}` | Materializes distinct values as a set. |
+| `Equal(a, b)` | `bool` | Compares two sequences in order. |
+| `JoinStrings(seq, sep)` | `string` | Joins string sequences. |
+| `Union(seqs...)` | `Seq[T]` | Keeps distinct values across sequences. |
+| `Intersect(a, b)` | `Seq[T]` | Keeps values in both sequences. |
+| `Difference(a, b)` | `Seq[T]` | Keeps values in `a` but not `b`. |
+| `SymmetricDifference(a, b)` | `Seq[T]` | Keeps values in exactly one sequence. |
+
 ## Seq to Seq2
 
 Use `ToMap`, `KeyBy`, or `CountBy` when a `Seq` should become `Seq2`. `GroupBy` and `GroupByMap` return grouped `iter.Seq2` values whose grouped values are `ko.Seq`; grouped keys are yielded in first-seen order.
@@ -165,7 +185,7 @@ for key, group := range ko.Slice([]string{"go", "ko", "kod"}).
 
 ## Seq2 Chains
 
-Start with `ko.Map`, chain operations, then call `Collect` for the final map.
+Start with `ko.Map`, chain operations, then call `Collect` for the final map. `Seq2[K, V]` can also be converted to `iter.Seq2[K, V]` for standard helpers such as `maps.Collect`.
 
 ```go
 got := ko.Map(map[string]int{"a": 1, "bb": 2}).
@@ -219,7 +239,7 @@ sort.Strings(keys)
 ## Behavior Notes
 
 - Predicates and mappers receive the item plus its index for slices.
-- `Slice` accepts any element type. `Uniq` requires values that can be used as Go map keys; for non-comparable items, use `UniqBy`.
+- `Slice` accepts any element type. `Uniq` requires comparable items; for non-comparable items, use `UniqBy`.
 - `Numeric` covers integer and floating-point types for numeric aggregate methods such as `SumBy` and `MeanBy`.
 - `Seq2` is an entry stream; duplicate key replacement happens when `Collect` materializes a Go map.
 - Map predicates and mappers receive key and value.

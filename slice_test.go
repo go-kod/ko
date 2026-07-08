@@ -249,19 +249,12 @@ func TestFromChannel(t *testing.T) {
 }
 
 func TestSeqCompact(t *testing.T) {
-	if got := Slice([]int{0, 1, 0, 2}).Compact().Collect(); !reflect.DeepEqual(got, []int{1, 2}) {
+	if got := Compact(Slice([]int{0, 1, 0, 2})).Collect(); !reflect.DeepEqual(got, []int{1, 2}) {
 		t.Fatalf("compact ints: %#v", got)
 	}
 
-	type item struct {
-		Name string
-		Tags []string
-	}
-
-	got := Slice([]item{{}, {Name: "go"}, {Tags: []string{"ko"}}}).Compact().Collect()
-	want := []item{{Name: "go"}, {Tags: []string{"ko"}}}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("compact non-comparable: %#v", got)
+	if got := Compact(Slice([]string{"", "go", ""})).Collect(); !reflect.DeepEqual(got, []string{"go"}) {
+		t.Fatalf("compact strings: %#v", got)
 	}
 
 	calls := 0
@@ -269,8 +262,8 @@ func TestSeqCompact(t *testing.T) {
 		Map(func(item int, _ int) int {
 			calls++
 			return item
-		}).
-		Compact()
+		})
+	seq = Compact(seq)
 	if calls != 0 {
 		t.Fatalf("compact should be lazy, calls: %d", calls)
 	}
@@ -434,7 +427,7 @@ func TestSeqLazyTerminalsStopEarly(t *testing.T) {
 }
 
 func TestSeqLazyMiddleOperationsStopEarly(t *testing.T) {
-	for item := range Slice([]int{1, 1, 2}).Uniq() {
+	for item := range Uniq(Slice([]int{1, 1, 2})) {
 		if item != 1 {
 			t.Fatalf("uniq item: %d", item)
 		}
@@ -719,6 +712,114 @@ func TestSeqSortByIsLazy(t *testing.T) {
 	}
 }
 
+func TestSeqCollectBackedOperationsAreLazyUntilConsumed(t *testing.T) {
+	assertLazy := func(name string, build func(Seq[int]) Seq[int], wantFirst int) {
+		calls := 0
+		seq := build(Slice([]int{1, 2, 3}).Map(func(item int, _ int) int {
+			calls++
+			return item
+		}))
+		if calls != 0 {
+			t.Fatalf("%s called before consumption: %d", name, calls)
+		}
+		for item := range seq {
+			if item != wantFirst {
+				t.Fatalf("%s item: %d", name, item)
+			}
+			break
+		}
+		if calls != 3 {
+			t.Fatalf("%s calls: %d", name, calls)
+		}
+	}
+
+	assertLazy("sort", func(seq Seq[int]) Seq[int] {
+		return seq.Sort(func(left, right int) int { return left - right })
+	}, 1)
+	assertLazy("reverse", func(seq Seq[int]) Seq[int] { return seq.Reverse() }, 3)
+	assertLazy("subset", func(seq Seq[int]) Seq[int] { return seq.Subset(-2, 2) }, 2)
+	assertLazy("takeRight", func(seq Seq[int]) Seq[int] { return seq.TakeRight(2) }, 2)
+	assertLazy("takeRightWhile", func(seq Seq[int]) Seq[int] {
+		return seq.TakeRightWhile(func(item int, _ int) bool { return item > 1 })
+	}, 2)
+	assertLazy("dropByIndex", func(seq Seq[int]) Seq[int] { return seq.DropByIndex(-1) }, 1)
+	assertLazy("dropRightWhile", func(seq Seq[int]) Seq[int] {
+		return seq.DropRightWhile(func(item int, _ int) bool { return item > 1 })
+	}, 1)
+}
+
+func TestSeqCountBackedOperationsAreLazyUntilConsumed(t *testing.T) {
+	assertLazy := func(name string, build func(Seq[int]) Seq[int], wantFirst int) {
+		calls := 0
+		seq := build(Slice([]int{1, 2, 1}).Map(func(item int, _ int) int {
+			calls++
+			return item
+		}))
+		if calls != 0 {
+			t.Fatalf("%s called before consumption: %d", name, calls)
+		}
+		for item := range seq {
+			if item != wantFirst {
+				t.Fatalf("%s item: %d", name, item)
+			}
+			break
+		}
+		if calls != 3 {
+			t.Fatalf("%s calls: %d", name, calls)
+		}
+	}
+
+	assertLazy("findUniquesBy", func(seq Seq[int]) Seq[int] {
+		return seq.FindUniquesBy(func(item int, _ int) int { return item })
+	}, 2)
+	assertLazy("findDuplicatesBy", func(seq Seq[int]) Seq[int] {
+		return seq.FindDuplicatesBy(func(item int, _ int) int { return item })
+	}, 1)
+
+	calls := 0
+	grouped := Slice([]string{"go", "ko", "kod"}).Map(func(item string, _ int) string {
+		calls++
+		return item
+	}).GroupByMap(func(item string, _ int) (int, string) {
+		return len(item), item + "!"
+	})
+	if calls != 0 {
+		t.Fatalf("groupByMap called before consumption: %d", calls)
+	}
+	for key, group := range grouped {
+		if key != 2 {
+			t.Fatalf("groupByMap key: %d", key)
+		}
+		if got := group.Collect(); !reflect.DeepEqual(got, []string{"go!", "ko!"}) {
+			t.Fatalf("groupByMap group: %#v", got)
+		}
+		break
+	}
+	if calls != 3 {
+		t.Fatalf("groupByMap calls: %d", calls)
+	}
+
+	calls = 0
+	counts := Slice([]string{"go", "ko", "kod"}).Map(func(item string, _ int) string {
+		calls++
+		return item
+	}).CountBy(func(item string, _ int) int {
+		return len(item)
+	})
+	if calls != 0 {
+		t.Fatalf("countBy called before consumption: %d", calls)
+	}
+	for key, count := range counts {
+		if key != 2 || count != 2 {
+			t.Fatalf("countBy entry: %d %d", key, count)
+		}
+		break
+	}
+	if calls != 3 {
+		t.Fatalf("countBy calls: %d", calls)
+	}
+}
+
 func TestSeqTakeWhile(t *testing.T) {
 	got := Slice([]int{1, 2, 3, 2}).
 		TakeWhile(func(item int, _ int) bool {
@@ -921,7 +1022,7 @@ func TestSeqCollectBackedOperationsStopYielding(t *testing.T) {
 }
 
 func TestSeqUniq(t *testing.T) {
-	got := Slice([]int{1, 2, 1, 3, 2}).Uniq().Collect()
+	got := Uniq(Slice([]int{1, 2, 1, 3, 2})).Collect()
 
 	want := []int{1, 2, 3}
 	if !reflect.DeepEqual(got, want) {
