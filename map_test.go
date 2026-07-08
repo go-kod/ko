@@ -227,6 +227,82 @@ func TestSeq2LazyOperationsStopEarly(t *testing.T) {
 	}
 }
 
+func TestSeq2ReturningMethodsAreLazyUntilConsumed(t *testing.T) {
+	assertLazySeq2(t, "pickKeys", func(seq Seq2[string, int]) Seq2[string, int] {
+		return seq.PickKeys("a", "b")
+	}, 1, "a", 1)
+	assertLazySeq2(t, "omitKeys", func(seq Seq2[string, int]) Seq2[string, int] {
+		return seq.OmitKeys("b")
+	}, 1, "a", 1)
+	assertLazySeq2(t, "assign", func(seq Seq2[string, int]) Seq2[string, int] {
+		return seq.Assign(map[string]int{"b": 20})
+	}, 1, "a", 1)
+	assertLazySeq2(t, "filter", func(seq Seq2[string, int]) Seq2[string, int] {
+		return seq.Filter(func(_ string, value int) bool { return value > 0 })
+	}, 1, "a", 1)
+	assertLazySeq2(t, "reject", func(seq Seq2[string, int]) Seq2[string, int] {
+		return seq.Reject(func(_ string, value int) bool { return value == 0 })
+	}, 1, "a", 1)
+	assertLazySeq2(t, "map", func(seq Seq2[string, int]) Seq2[string, int] {
+		return seq.Map(func(key string, value int) (string, int) { return key, value * 10 })
+	}, 1, "a", 10)
+	assertLazySeq2(t, "mapKeys", func(seq Seq2[string, int]) Seq2[string, int] {
+		return seq.MapKeys(func(key string, _ int) string { return key + "!" })
+	}, 1, "a!", 1)
+	assertLazySeq2(t, "mapValues", func(seq Seq2[string, int]) Seq2[string, int] {
+		return seq.MapValues(func(_ string, value int) int { return value * 10 })
+	}, 1, "a", 10)
+	assertLazySeq2(t, "forEach", func(seq Seq2[string, int]) Seq2[string, int] {
+		return seq.ForEach(func(_ string, _ int) {})
+	}, 1, "a", 1)
+
+	calls := 0
+	empty := lazySeq2(&calls).PickKeys()
+	if calls != 0 {
+		t.Fatalf("pickKeys empty called before consumption: %d", calls)
+	}
+	for key, value := range empty {
+		t.Fatalf("pickKeys empty yielded %q %d", key, value)
+	}
+	if calls != 0 {
+		t.Fatalf("pickKeys empty calls: %d", calls)
+	}
+}
+
+func TestSeq2SliceReturningMethodsAreLazyUntilConsumed(t *testing.T) {
+	assertLazySeq2ToSeq(t, "keys", func(seq Seq2[string, int]) Seq[string] {
+		return seq.Keys()
+	}, 1, "a")
+	assertLazySeq2ToSeq(t, "values", func(seq Seq2[string, int]) Seq[string] {
+		return seq.Values().Map(func(item int, _ int) string { return strconv.Itoa(item) })
+	}, 1, "1")
+	assertLazySeq2ToSeq(t, "toSlice", func(seq Seq2[string, int]) Seq[string] {
+		return seq.ToSlice(func(key string, value int) string { return key + strconv.Itoa(value) })
+	}, 1, "a1")
+	assertLazySeq2ToSeq(t, "filterMapToSlice", func(seq Seq2[string, int]) Seq[string] {
+		return seq.FilterMapToSlice(func(key string, value int) (string, bool) {
+			return key + strconv.Itoa(value), true
+		})
+	}, 1, "a1")
+}
+
+func TestSeq2ChunkEntriesIsLazyUntilConsumed(t *testing.T) {
+	calls := 0
+	seq := lazySeq2(&calls).ChunkEntries(2)
+	if calls != 0 {
+		t.Fatalf("chunkEntries called before consumption: %d", calls)
+	}
+	for chunk := range seq {
+		if got := chunk.Collect(); !reflect.DeepEqual(got, map[string]int{"a": 1, "b": 2}) {
+			t.Fatalf("chunkEntries chunk: %#v", got)
+		}
+		break
+	}
+	if calls != 2 {
+		t.Fatalf("chunkEntries calls: %d", calls)
+	}
+}
+
 func TestSeq2ChunkEntries(t *testing.T) {
 	chunks := []map[string]int{}
 	for chunk := range Map(map[string]int{"a": 1, "b": 2, "c": 3}).ChunkEntries(2) {
@@ -253,6 +329,55 @@ func TestSeq2ChunkEntries(t *testing.T) {
 
 	for chunk := range Map(map[string]int{}).ChunkEntries(2) {
 		t.Fatalf("empty chunk: %#v", chunk.Collect())
+	}
+}
+
+func lazySeq2(calls *int) Seq2[string, int] {
+	return Seq2[string, int](func(yield func(string, int) bool) {
+		(*calls)++
+		if !yield("a", 1) {
+			return
+		}
+		(*calls)++
+		yield("b", 2)
+	})
+}
+
+func assertLazySeq2(t *testing.T, name string, build func(Seq2[string, int]) Seq2[string, int], wantCalls int, wantKey string, wantValue int) {
+	t.Helper()
+
+	calls := 0
+	seq := build(lazySeq2(&calls))
+	if calls != 0 {
+		t.Fatalf("%s called before consumption: %d", name, calls)
+	}
+	for key, value := range seq {
+		if key != wantKey || value != wantValue {
+			t.Fatalf("%s entry: %q %d", name, key, value)
+		}
+		break
+	}
+	if calls != wantCalls {
+		t.Fatalf("%s calls: %d", name, calls)
+	}
+}
+
+func assertLazySeq2ToSeq(t *testing.T, name string, build func(Seq2[string, int]) Seq[string], wantCalls int, wantFirst string) {
+	t.Helper()
+
+	calls := 0
+	seq := build(lazySeq2(&calls))
+	if calls != 0 {
+		t.Fatalf("%s called before consumption: %d", name, calls)
+	}
+	for item := range seq {
+		if item != wantFirst {
+			t.Fatalf("%s item: %q", name, item)
+		}
+		break
+	}
+	if calls != wantCalls {
+		t.Fatalf("%s calls: %d", name, calls)
 	}
 }
 

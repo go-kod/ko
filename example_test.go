@@ -12,7 +12,7 @@ import (
 )
 
 func ExampleOf() {
-	got := ko.Uniq(ko.Of(1, 2, 2, 3, 4)).
+	got := ko.Distinct(ko.Of(1, 2, 2, 3, 4)).
 		Filter(func(item int, _ int) bool {
 			return item%2 == 0
 		}).
@@ -25,9 +25,9 @@ func ExampleOf() {
 	// Output: [20 40]
 }
 
-func ExampleSlice_uniqBy() {
+func ExampleSlice_distinctBy() {
 	got := ko.Slice([]string{"go", "ko", "kod"}).
-		UniqBy(func(item string, _ int) int {
+		DistinctBy(func(item string, _ int) int {
 			return len(item)
 		}).
 		Collect()

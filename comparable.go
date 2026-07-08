@@ -6,9 +6,125 @@ import (
 	"strings"
 )
 
-// Uniq returns a Seq that yields each distinct element once, preserving
+// Comparable converts seq into a SeqComparable, enabling comparable-only
+// operations as methods.
+func Comparable[T comparable](s Seq[T]) SeqComparable[T] {
+	return SeqComparable[T](iter.Seq[T](s))
+}
+
+// Seq converts s back to the unconstrained Seq type.
+func (s SeqComparable[T]) Seq() Seq[T] {
+	return Seq[T](iter.Seq[T](s))
+}
+
+// Collect materializes the sequence into a slice.
+func (s SeqComparable[T]) Collect() []T {
+	return s.Seq().Collect()
+}
+
+// Distinct yields each distinct element once, preserving first-occurrence order.
+func (s SeqComparable[T]) Distinct() SeqComparable[T] {
+	return SeqComparable[T](Distinct(s.Seq()))
+}
+
+// Compact drops zero-value elements.
+func (s SeqComparable[T]) Compact() SeqComparable[T] {
+	return SeqComparable[T](Compact(s.Seq()))
+}
+
+// Without excludes any element equal to one of vals.
+func (s SeqComparable[T]) Without(vals ...T) SeqComparable[T] {
+	return SeqComparable[T](Without(s.Seq(), vals...))
+}
+
+// Contains reports whether v occurs in s.
+func (s SeqComparable[T]) Contains(v T) bool {
+	return Contains(s.Seq(), v)
+}
+
+// IndexOf returns the first index of v in s.
+func (s SeqComparable[T]) IndexOf(v T) (int, bool) {
+	return IndexOf(s.Seq(), v)
+}
+
+// LastIndexOf returns the last index of v in s.
+func (s SeqComparable[T]) LastIndexOf(v T) (int, bool) {
+	return LastIndexOf(s.Seq(), v)
+}
+
+// CountValues returns a map from each element to the number of times it occurs.
+func (s SeqComparable[T]) CountValues() map[T]int {
+	return CountValues(s.Seq())
+}
+
+// ToSet returns a set of distinct elements.
+func (s SeqComparable[T]) ToSet() map[T]struct{} {
+	return ToSet(s.Seq())
+}
+
+// Equal reports whether s and other yield the same elements in the same order.
+func (s SeqComparable[T]) Equal(other SeqComparable[T]) bool {
+	return Equal(s.Seq(), other.Seq())
+}
+
+// Union returns distinct elements across s and others.
+func (s SeqComparable[T]) Union(others ...SeqComparable[T]) SeqComparable[T] {
+	seqs := make([]Seq[T], 0, len(others)+1)
+	seqs = append(seqs, s.Seq())
+	for _, other := range others {
+		seqs = append(seqs, other.Seq())
+	}
+	return SeqComparable[T](Union(seqs...))
+}
+
+// Intersect returns elements present in both s and other.
+func (s SeqComparable[T]) Intersect(other SeqComparable[T]) SeqComparable[T] {
+	return SeqComparable[T](Intersect(s.Seq(), other.Seq()))
+}
+
+// Difference returns elements in s but not in other.
+func (s SeqComparable[T]) Difference(other SeqComparable[T]) SeqComparable[T] {
+	return SeqComparable[T](Difference(s.Seq(), other.Seq()))
+}
+
+// SymmetricDifference returns elements in exactly one sequence.
+func (s SeqComparable[T]) SymmetricDifference(other SeqComparable[T]) SeqComparable[T] {
+	return SeqComparable[T](SymmetricDifference(s.Seq(), other.Seq()))
+}
+
+// Filter keeps items for which predicate returns true.
+func (s SeqComparable[T]) Filter(predicate func(item T, index int) bool) SeqComparable[T] {
+	return SeqComparable[T](s.Seq().Filter(predicate))
+}
+
+// Reject drops items for which predicate returns true.
+func (s SeqComparable[T]) Reject(predicate func(item T, index int) bool) SeqComparable[T] {
+	return SeqComparable[T](s.Seq().Reject(predicate))
+}
+
+// Take keeps the first n items.
+func (s SeqComparable[T]) Take(n int) SeqComparable[T] {
+	return SeqComparable[T](s.Seq().Take(n))
+}
+
+// Drop skips the first n items.
+func (s SeqComparable[T]) Drop(n int) SeqComparable[T] {
+	return SeqComparable[T](s.Seq().Drop(n))
+}
+
+// TakeWhile keeps items from the beginning while predicate returns true.
+func (s SeqComparable[T]) TakeWhile(predicate func(item T, index int) bool) SeqComparable[T] {
+	return SeqComparable[T](s.Seq().TakeWhile(predicate))
+}
+
+// DropWhile drops items from the beginning while predicate returns true.
+func (s SeqComparable[T]) DropWhile(predicate func(item T, index int) bool) SeqComparable[T] {
+	return SeqComparable[T](s.Seq().DropWhile(predicate))
+}
+
+// Distinct returns a Seq that yields each distinct element once, preserving
 // first-occurrence order.
-func Uniq[T comparable](s Seq[T]) Seq[T] {
+func Distinct[T comparable](s Seq[T]) Seq[T] {
 	return Seq[T](func(yield func(T) bool) {
 		seen := make(map[T]struct{})
 		for v := range iter.Seq[T](s) {
@@ -21,11 +137,6 @@ func Uniq[T comparable](s Seq[T]) Seq[T] {
 			}
 		}
 	})
-}
-
-// Distinct is an alias for Uniq.
-func Distinct[T comparable](s Seq[T]) Seq[T] {
-	return Uniq(s)
 }
 
 // Contains reports whether v occurs in s. It short-circuits on the first match.

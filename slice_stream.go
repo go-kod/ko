@@ -92,24 +92,9 @@ func (c Seq[T]) FilterReject(predicate func(item T, index int) bool) (Seq[T], Se
 		})
 }
 
-// UniqBy removes duplicate items by key, keeping the first occurrence.
-func (c Seq[T]) UniqBy[K comparable](mapper func(item T, index int) K) Seq[T] {
-	return Seq[T](uniqBySeq(iter.Seq[T](c), mapper))
-}
-
-// UniqMap maps items and keeps the first occurrence of each mapped value.
-func (c Seq[T]) UniqMap[R comparable](mapper func(item T, index int) R) Seq[R] {
-	return Seq[R](uniqMapSeq(iter.Seq[T](c), mapper))
-}
-
-// FindUniquesBy keeps items whose mapped key appears exactly once.
-func (c Seq[T]) FindUniquesBy[K comparable](mapper func(item T, index int) K) Seq[T] {
-	return Seq[T](findUniquesBySeq(iter.Seq[T](c), mapper))
-}
-
-// FindDuplicatesBy keeps the first item for each duplicated mapped key.
-func (c Seq[T]) FindDuplicatesBy[K comparable](mapper func(item T, index int) K) Seq[T] {
-	return Seq[T](findDuplicatesBySeq(iter.Seq[T](c), mapper))
+// DistinctBy removes duplicate items by key, keeping the first occurrence.
+func (c Seq[T]) DistinctBy[K comparable](mapper func(item T, index int) K) Seq[T] {
+	return Seq[T](distinctBySeq(iter.Seq[T](c), mapper))
 }
 
 // Map transforms items and may change the element type.
@@ -644,7 +629,7 @@ func (c Seq[T]) Reverse() Seq[T] {
 	})
 }
 
-func uniqBySeq[T any, K comparable](seq iter.Seq[T], mapper func(item T, index int) K) iter.Seq[T] {
+func distinctBySeq[T any, K comparable](seq iter.Seq[T], mapper func(item T, index int) K) iter.Seq[T] {
 	return func(yield func(T) bool) {
 		seen := map[K]struct{}{}
 		i := 0
@@ -656,70 +641,6 @@ func uniqBySeq[T any, K comparable](seq iter.Seq[T], mapper func(item T, index i
 			}
 			seen[key] = struct{}{}
 			if !yield(item) {
-				return
-			}
-		}
-	}
-}
-
-func uniqMapSeq[T any, R comparable](seq iter.Seq[T], mapper func(item T, index int) R) iter.Seq[R] {
-	return func(yield func(R) bool) {
-		seen := map[R]struct{}{}
-		i := 0
-		for item := range seq {
-			mapped := mapper(item, i)
-			i++
-			if _, ok := seen[mapped]; ok {
-				continue
-			}
-			seen[mapped] = struct{}{}
-			if !yield(mapped) {
-				return
-			}
-		}
-	}
-}
-
-func findUniquesBySeq[T any, K comparable](seq iter.Seq[T], mapper func(item T, index int) K) iter.Seq[T] {
-	return func(yield func(T) bool) {
-		counts := make(map[K]int)
-		first := make(map[K]T)
-		order := make([]K, 0)
-		i := 0
-		for item := range seq {
-			key := mapper(item, i)
-			if _, ok := counts[key]; !ok {
-				first[key] = item
-				order = append(order, key)
-			}
-			counts[key]++
-			i++
-		}
-		for _, key := range order {
-			if counts[key] == 1 && !yield(first[key]) {
-				return
-			}
-		}
-	}
-}
-
-func findDuplicatesBySeq[T any, K comparable](seq iter.Seq[T], mapper func(item T, index int) K) iter.Seq[T] {
-	return func(yield func(T) bool) {
-		counts := make(map[K]int)
-		first := make(map[K]T)
-		order := make([]K, 0)
-		i := 0
-		for item := range seq {
-			key := mapper(item, i)
-			if _, ok := counts[key]; !ok {
-				first[key] = item
-				order = append(order, key)
-			}
-			counts[key]++
-			i++
-		}
-		for _, key := range order {
-			if counts[key] > 1 && !yield(first[key]) {
 				return
 			}
 		}

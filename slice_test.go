@@ -427,29 +427,19 @@ func TestSeqLazyTerminalsStopEarly(t *testing.T) {
 }
 
 func TestSeqLazyMiddleOperationsStopEarly(t *testing.T) {
-	for item := range Uniq(Slice([]int{1, 1, 2})) {
+	for item := range Distinct(Slice([]int{1, 1, 2})) {
 		if item != 1 {
-			t.Fatalf("uniq item: %d", item)
+			t.Fatalf("distinct item: %d", item)
 		}
 		break
 	}
 
 	for item := range Slice([]string{"go", "ko", "kod"}).
-		UniqBy(func(item string, _ int) int {
+		DistinctBy(func(item string, _ int) int {
 			return len(item)
 		}) {
 		if item != "go" {
-			t.Fatalf("uniqBy item: %q", item)
-		}
-		break
-	}
-
-	for item := range Slice([]string{"go", "ko", "kod"}).
-		UniqMap(func(item string, _ int) int {
-			return len(item)
-		}) {
-		if item != 2 {
-			t.Fatalf("uniqMap item: %d", item)
+			t.Fatalf("distinctBy item: %q", item)
 		}
 		break
 	}
@@ -749,33 +739,6 @@ func TestSeqCollectBackedOperationsAreLazyUntilConsumed(t *testing.T) {
 }
 
 func TestSeqCountBackedOperationsAreLazyUntilConsumed(t *testing.T) {
-	assertLazy := func(name string, build func(Seq[int]) Seq[int], wantFirst int) {
-		calls := 0
-		seq := build(Slice([]int{1, 2, 1}).Map(func(item int, _ int) int {
-			calls++
-			return item
-		}))
-		if calls != 0 {
-			t.Fatalf("%s called before consumption: %d", name, calls)
-		}
-		for item := range seq {
-			if item != wantFirst {
-				t.Fatalf("%s item: %d", name, item)
-			}
-			break
-		}
-		if calls != 3 {
-			t.Fatalf("%s calls: %d", name, calls)
-		}
-	}
-
-	assertLazy("findUniquesBy", func(seq Seq[int]) Seq[int] {
-		return seq.FindUniquesBy(func(item int, _ int) int { return item })
-	}, 2)
-	assertLazy("findDuplicatesBy", func(seq Seq[int]) Seq[int] {
-		return seq.FindDuplicatesBy(func(item int, _ int) int { return item })
-	}, 1)
-
 	calls := 0
 	grouped := Slice([]string{"go", "ko", "kod"}).Map(func(item string, _ int) string {
 		calls++
@@ -1021,8 +984,8 @@ func TestSeqCollectBackedOperationsStopYielding(t *testing.T) {
 	}
 }
 
-func TestSeqUniq(t *testing.T) {
-	got := Uniq(Slice([]int{1, 2, 1, 3, 2})).Collect()
+func TestSeqDistinct(t *testing.T) {
+	got := Distinct(Slice([]int{1, 2, 1, 3, 2})).Collect()
 
 	want := []int{1, 2, 3}
 	if !reflect.DeepEqual(got, want) {
@@ -1030,9 +993,9 @@ func TestSeqUniq(t *testing.T) {
 	}
 }
 
-func TestSeqUniqBy(t *testing.T) {
+func TestSeqDistinctBy(t *testing.T) {
 	got := Slice([]string{"go", "ko", "kod"}).
-		UniqBy(func(item string, _ int) int {
+		DistinctBy(func(item string, _ int) int {
 			return len(item)
 		}).
 		Collect()
@@ -1043,7 +1006,7 @@ func TestSeqUniqBy(t *testing.T) {
 	}
 }
 
-func TestSeqUniqBySupportsNonComparableItems(t *testing.T) {
+func TestSeqDistinctBySupportsNonComparableItems(t *testing.T) {
 	type item struct {
 		id     int
 		values []int
@@ -1053,7 +1016,7 @@ func TestSeqUniqBySupportsNonComparableItems(t *testing.T) {
 		{id: 1, values: []int{1}},
 		{id: 1, values: []int{2}},
 		{id: 2, values: []int{3}},
-	}).UniqBy(func(item item, _ int) int {
+	}).DistinctBy(func(item item, _ int) int {
 		return item.id
 	}).Collect()
 
@@ -1066,119 +1029,40 @@ func TestSeqUniqBySupportsNonComparableItems(t *testing.T) {
 	}
 }
 
-func TestSeqIsUniqBy(t *testing.T) {
+func TestSeqIsDistinctBy(t *testing.T) {
 	type item struct {
 		id     int
 		values []int
 	}
 
-	if !Slice([]item{{id: 1}, {id: 2}}).IsUniqBy(func(item item, _ int) int {
+	if !Slice([]item{{id: 1}, {id: 2}}).IsDistinctBy(func(item item, _ int) int {
 		return item.id
 	}) {
-		t.Fatalf("unique items should be unique")
+		t.Fatalf("distinct items should be distinct")
 	}
 
-	if Slice([]item{{id: 1, values: []int{1}}, {id: 1, values: []int{2}}}).IsUniqBy(func(item item, _ int) int {
+	if Slice([]item{{id: 1, values: []int{1}}, {id: 1, values: []int{2}}}).IsDistinctBy(func(item item, _ int) int {
 		return item.id
 	}) {
-		t.Fatalf("duplicate keys should not be unique")
+		t.Fatalf("duplicate keys should not be distinct")
 	}
 
 	calls := 0
-	ok := Slice([]int{1, 2, 1, 3}).IsUniqBy(func(item int, _ int) int {
+	ok := Slice([]int{1, 2, 1, 3}).IsDistinctBy(func(item int, _ int) int {
 		calls++
 		return item
 	})
 	if ok {
-		t.Fatalf("duplicate values should not be unique")
+		t.Fatalf("duplicate values should not be distinct")
 	}
 	if calls != 3 {
-		t.Fatalf("isUniqBy should stop at first duplicate, calls: %d", calls)
+		t.Fatalf("isDistinctBy should stop at first duplicate, calls: %d", calls)
 	}
 
-	if !Slice([]int{}).IsUniqBy(func(item int, _ int) int {
+	if !Slice([]int{}).IsDistinctBy(func(item int, _ int) int {
 		return item
 	}) {
-		t.Fatalf("empty sequence should be unique")
-	}
-}
-
-func TestSeqUniqMap(t *testing.T) {
-	got := Slice([]string{"go", "ko", "kod", "go-kod"}).
-		UniqMap(func(item string, _ int) int {
-			return len(item)
-		}).
-		Collect()
-
-	want := []int{2, 3, 6}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %#v, want %#v", got, want)
-	}
-}
-
-func TestSeqFindUniquesBy(t *testing.T) {
-	got := Slice([]string{"go", "ko", "kod", "x"}).
-		FindUniquesBy(func(item string, _ int) int {
-			return len(item)
-		}).
-		Collect()
-
-	want := []string{"kod", "x"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %#v, want %#v", got, want)
-	}
-
-	got = Slice([]string{"go", "ko"}).
-		FindUniquesBy(func(item string, _ int) int {
-			return len(item)
-		}).
-		Collect()
-
-	if len(got) != 0 {
-		t.Fatalf("all duplicated: %#v", got)
-	}
-
-	for item := range Slice([]string{"go", "kod", "x"}).
-		FindUniquesBy(func(item string, _ int) int {
-			return len(item)
-		}) {
-		if item != "go" {
-			t.Fatalf("unique item: %q", item)
-		}
-		break
-	}
-}
-
-func TestSeqFindDuplicatesBy(t *testing.T) {
-	got := Slice([]string{"go", "ko", "kod", "go-kod", "x"}).
-		FindDuplicatesBy(func(item string, _ int) int {
-			return len(item)
-		}).
-		Collect()
-
-	want := []string{"go"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %#v, want %#v", got, want)
-	}
-
-	got = Slice([]string{"go", "kod"}).
-		FindDuplicatesBy(func(item string, _ int) int {
-			return len(item)
-		}).
-		Collect()
-
-	if len(got) != 0 {
-		t.Fatalf("no duplicates: %#v", got)
-	}
-
-	for item := range Slice([]string{"go", "ko", "x"}).
-		FindDuplicatesBy(func(item string, _ int) int {
-			return len(item)
-		}) {
-		if item != "go" {
-			t.Fatalf("duplicate item: %q", item)
-		}
-		break
+		t.Fatalf("empty sequence should be distinct")
 	}
 }
 
@@ -1765,6 +1649,26 @@ func TestSeqToMap(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %#v, want %#v", got, want)
 	}
+
+	calls := 0
+	seq := Slice([]int{1, 2}).Map(func(item int, _ int) int {
+		calls++
+		return item
+	}).ToMap(func(item int, _ int) (int, int) {
+		return item, item * 10
+	})
+	if calls != 0 {
+		t.Fatalf("toMap should be lazy: %d", calls)
+	}
+	for key, value := range seq {
+		if key != 1 || value != 10 {
+			t.Fatalf("toMap first entry: %d %d", key, value)
+		}
+		break
+	}
+	if calls != 1 {
+		t.Fatalf("toMap calls: %d", calls)
+	}
 }
 
 func TestSeqEnumerate(t *testing.T) {
@@ -2033,10 +1937,14 @@ func TestSeqChunkOuterCanBeChainedByConversion(t *testing.T) {
 
 func TestSeqChunkStopsEarly(t *testing.T) {
 	calls := 0
-	for chunk := range Slice([]int{1, 2, 3, 4}).Map(func(item int, _ int) int {
+	chunks := Slice([]int{1, 2, 3, 4}).Map(func(item int, _ int) int {
 		calls++
 		return item
-	}).Chunk(2) {
+	}).Chunk(2)
+	if calls != 0 {
+		t.Fatalf("chunk called before consumption: %d", calls)
+	}
+	for chunk := range chunks {
 		if got := chunk.Collect(); !reflect.DeepEqual(got, []int{1, 2}) {
 			t.Fatalf("chunk: %#v", got)
 		}
@@ -2091,10 +1999,14 @@ func TestSeqWindowOuterCanBeChainedByConversion(t *testing.T) {
 
 func TestSeqWindowStopsEarly(t *testing.T) {
 	calls := 0
-	for window := range Slice([]int{1, 2, 3, 4}).Map(func(item int, _ int) int {
+	windows := Slice([]int{1, 2, 3, 4}).Map(func(item int, _ int) int {
 		calls++
 		return item
-	}).Window(3, 1) {
+	}).Window(3, 1)
+	if calls != 0 {
+		t.Fatalf("window called before consumption: %d", calls)
+	}
+	for window := range windows {
 		if got := window.Collect(); !reflect.DeepEqual(got, []int{1, 2, 3}) {
 			t.Fatalf("window: %#v", got)
 		}

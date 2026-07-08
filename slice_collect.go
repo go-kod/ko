@@ -14,8 +14,8 @@ func (c Seq[T]) Collect() []T {
 	return slices.Collect(iter.Seq[T](c))
 }
 
-// IsUniqBy reports whether all mapped keys are unique.
-func (c Seq[T]) IsUniqBy[K comparable](mapper func(item T, index int) K) bool {
+// IsDistinctBy reports whether all mapped keys are distinct.
+func (c Seq[T]) IsDistinctBy[K comparable](mapper func(item T, index int) K) bool {
 	seen := make(map[K]struct{})
 	i := 0
 	for item := range iter.Seq[T](c) {

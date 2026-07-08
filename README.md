@@ -48,11 +48,8 @@ Seq methods:
 | `Filter(predicate)` | `Seq[T]` | Keeps matching items. |
 | `Reject(predicate)` | `Seq[T]` | Drops matching items. |
 | `FilterReject(predicate)` | `(Seq[T], Seq[T])` | Returns matching and non-matching items. |
-| `UniqBy(mapper)` | `Seq[T]` | Removes duplicate items by a comparable key, keeping the first occurrence. |
-| `IsUniqBy(mapper)` | `bool` | Reports whether all mapped keys are unique. |
-| `UniqMap(mapper)` | `Seq[R]` | Maps items and removes duplicate mapped values, keeping the first occurrence. |
-| `FindUniquesBy(mapper)` | `Seq[T]` | Keeps items whose mapped key appears exactly once. |
-| `FindDuplicatesBy(mapper)` | `Seq[T]` | Keeps the first item for each duplicated mapped key. |
+| `DistinctBy(mapper)` | `Seq[T]` | Removes duplicate items by a comparable key, keeping the first occurrence. |
+| `IsDistinctBy(mapper)` | `bool` | Reports whether all mapped keys are distinct. |
 | `Map(mapper)` | `Seq[R]` | Changes item type. |
 | `FilterMap(mapper)` | `Seq[R]` | Maps items and keeps accepted results. |
 | `FlatMap(mapper)` | `Seq[R]` | Maps each item to a `Seq[R]` and flattens one level. |
@@ -136,13 +133,15 @@ for window := range ko.Slice([]int{1, 2, 3, 4}).Window(3, 1) {
 // [][]int{{1, 2, 3}, {2, 3, 4}}
 ```
 
-## Comparable Helpers
+## Constrained Helpers
 
-These top-level helpers require comparable items, so invalid element types fail at compile time.
+These top-level helpers constrain item types, so invalid element types fail at compile time.
 
 | Function | Returns | Notes |
 | --- | --- | --- |
-| `Uniq(seq)` | `Seq[T]` | Keeps first occurrences. |
+| `Comparable(seq)` | `SeqComparable[T]` | Enables comparable-only methods while keeping a chain. |
+| `Ordered(seq)` | `SeqOrdered[T]` | Enables ordered methods such as `Sort`, `Max`, and `Min`. |
+| `Numbers(seq)` | `SeqNumeric[T]` | Enables numeric methods such as `Sum`, `Product`, and `Mean`. |
 | `Distinct(seq)` | `Seq[T]` | Keeps first occurrences. |
 | `Compact(seq)` | `Seq[T]` | Drops zero values. |
 | `Without(seq, values...)` | `Seq[T]` | Drops listed values. |
@@ -157,6 +156,8 @@ These top-level helpers require comparable items, so invalid element types fail 
 | `Intersect(a, b)` | `Seq[T]` | Keeps values in both sequences. |
 | `Difference(a, b)` | `Seq[T]` | Keeps values in `a` but not `b`. |
 | `SymmetricDifference(a, b)` | `Seq[T]` | Keeps values in exactly one sequence. |
+
+`SeqComparable[T]` exposes method forms such as `Distinct`, `Compact`, `Without`, `Contains`, `IndexOf`, `Union`, `Intersect`, `Difference`, and `SymmetricDifference`, plus basic `Filter`/`Reject`/`Take`/`Drop` chaining. `SeqOrdered[T]` adds `Sort`, `Max`, and `Min`; `SeqNumeric[T]` adds `Sum`, `Product`, and `Mean`.
 
 ## Seq to Seq2
 
@@ -239,7 +240,7 @@ sort.Strings(keys)
 ## Behavior Notes
 
 - Predicates and mappers receive the item plus its index for slices.
-- `Slice` accepts any element type. `Uniq` requires comparable items; for non-comparable items, use `UniqBy`.
+- `Slice` accepts any element type. `Distinct` requires comparable items; for non-comparable items, use `DistinctBy`.
 - `Numeric` covers integer and floating-point types for numeric aggregate methods such as `SumBy` and `MeanBy`.
 - `Seq2` is an entry stream; duplicate key replacement happens when `Collect` materializes a Go map.
 - Map predicates and mappers receive key and value.
@@ -249,7 +250,7 @@ sort.Strings(keys)
 - `FromChannel` is one-shot because it drains the source channel as it is consumed.
 - `FilterReject` returns two sequences backed by one shared source; each side advances the source only far enough to find its next item and reuses cached split results.
 - `ForEach` and `ForEachWhile` are pass-through chain methods; their callbacks run when the returned chain is consumed.
-- Methods that need suffix, sort, reverse, or whole-sequence knowledge buffer only when consumed, such as `Sort`, `SortBy`, `Reverse`, `ReduceRight`, negative `Nth`, negative-offset `Subset`, right-side `While` methods, grouping, and uniqueness-by-count helpers.
+- Methods that need suffix, sort, reverse, or whole-sequence knowledge buffer only when consumed, such as `Sort`, `SortBy`, `Reverse`, `ReduceRight`, negative `Nth`, negative-offset `Subset`, right-side `While` methods, and grouping.
 - This package intentionally stays small. Prefer Go's standard library when it already covers the job.
 
 ## Development
