@@ -453,6 +453,11 @@ func (c Seq[T]) Every(predicate func(item T, index int) bool) bool {
 	})
 }
 
+// None reports whether no item matches predicate.
+func (c Seq[T]) None(predicate func(item T, index int) bool) bool {
+	return !c.Some(predicate)
+}
+
 // Find returns the first matching item.
 func (c Seq[T]) Find(predicate func(item T, index int) bool) (T, bool) {
 	item, _, ok := findSeq(iter.Seq[T](c), predicate)

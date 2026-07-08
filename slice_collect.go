@@ -257,6 +257,93 @@ func (c Seq[T]) ReduceRight[R any](accumulator func(agg R, item T, index int) R,
 	return result
 }
 
+// Max returns the greatest item by compare.
+func (c Seq[T]) Max(compare func(left, right T) int) (T, bool) {
+	var best T
+	ok := false
+	for item := range iter.Seq[T](c) {
+		if !ok || compare(best, item) < 0 {
+			best = item
+			ok = true
+		}
+	}
+	return best, ok
+}
+
+// Min returns the least item by compare.
+func (c Seq[T]) Min(compare func(left, right T) int) (T, bool) {
+	var best T
+	ok := false
+	for item := range iter.Seq[T](c) {
+		if !ok || compare(item, best) < 0 {
+			best = item
+			ok = true
+		}
+	}
+	return best, ok
+}
+
+// MaxBy returns the item with the greatest mapped ordered key.
+func (c Seq[T]) MaxBy[K cmp.Ordered](mapper func(item T, index int) K) (T, bool) {
+	var best T
+	var bestKey K
+	ok := false
+	i := 0
+	for item := range iter.Seq[T](c) {
+		key := mapper(item, i)
+		if !ok || cmp.Compare(bestKey, key) < 0 {
+			best = item
+			bestKey = key
+			ok = true
+		}
+		i++
+	}
+	return best, ok
+}
+
+// MinBy returns the item with the least mapped ordered key.
+func (c Seq[T]) MinBy[K cmp.Ordered](mapper func(item T, index int) K) (T, bool) {
+	var best T
+	var bestKey K
+	ok := false
+	i := 0
+	for item := range iter.Seq[T](c) {
+		key := mapper(item, i)
+		if !ok || cmp.Compare(key, bestKey) < 0 {
+			best = item
+			bestKey = key
+			ok = true
+		}
+		i++
+	}
+	return best, ok
+}
+
+// SumBy sums the mapped numeric values.
+func (c Seq[T]) SumBy[N Numeric](mapper func(item T, index int) N) N {
+	var sum N
+	i := 0
+	for item := range iter.Seq[T](c) {
+		sum += mapper(item, i)
+		i++
+	}
+	return sum
+}
+
+// MeanBy returns the arithmetic mean of mapped numeric values, or 0 for an empty sequence.
+func (c Seq[T]) MeanBy[N Numeric](mapper func(item T, index int) N) float64 {
+	var sum N
+	count := 0
+	for item := range iter.Seq[T](c) {
+		sum += mapper(item, count)
+		count++
+	}
+	if count == 0 {
+		return 0
+	}
+	return float64(sum) / float64(count)
+}
+
 // FindLast returns the last matching item.
 func (c Seq[T]) FindLast(predicate func(item T, index int) bool) (T, bool) {
 	candidate, _, ok := c.FindLastIndex(predicate)

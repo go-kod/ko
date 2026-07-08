@@ -78,6 +78,12 @@ Seq methods:
 | `Reverse()` | `Seq[T]` | Returns a reversed copy. |
 | `Reduce(accumulator, initial)` | `R` | Folds the slice into one value. |
 | `ReduceRight(accumulator, initial)` | `R` | Folds the slice from right to left. |
+| `Max(compare)` | `(T, bool)` | Returns the greatest item by comparator. |
+| `Min(compare)` | `(T, bool)` | Returns the least item by comparator. |
+| `MaxBy(mapper)` | `(T, bool)` | Returns the item with the greatest mapped ordered key. |
+| `MinBy(mapper)` | `(T, bool)` | Returns the item with the least mapped ordered key. |
+| `SumBy(mapper)` | `N` | Sums mapped numeric values. |
+| `MeanBy(mapper)` | `float64` | Returns the arithmetic mean of mapped numeric values, or `0` for an empty sequence. |
 | `Join(sep, mapper)` | `string` | Maps items to strings and joins them with `sep`. |
 | `Scan(accumulator, initial)` | `Seq[R]` | Returns running accumulations, including the initial value. |
 | `Find(predicate)` | `(T, bool)` | Returns the first match and whether it was found. |
@@ -91,6 +97,7 @@ Seq methods:
 | `Some(predicate)` | `bool` | Reports whether any item matches. |
 | `Count(predicate)` | `int` | Counts matching items. |
 | `Every(predicate)` | `bool` | Reports whether all items match. |
+| `None(predicate)` | `bool` | Reports whether no item matches. |
 | `WithoutBy(mapper, exclude...)` | `Seq[T]` | Drops items whose mapped key is excluded. |
 | `Chunk(n)` | `iter.Seq[ko.Seq[T]]` | Splits into chunks. `n <= 0` yields nothing. |
 | `Window(n, step)` | `iter.Seq[ko.Seq[T]]` | Splits into overlapping windows. `n <= 0` or `step <= 0` yields nothing. |
@@ -213,6 +220,7 @@ sort.Strings(keys)
 
 - Predicates and mappers receive the item plus its index for slices.
 - `Slice` accepts any element type. `Uniq` requires values that can be used as Go map keys; for non-comparable items, use `UniqBy`.
+- `Numeric` covers integer and floating-point types for numeric aggregate methods such as `SumBy` and `MeanBy`.
 - `Seq2` is an entry stream; duplicate key replacement happens when `Collect` materializes a Go map.
 - Map predicates and mappers receive key and value.
 - Map iteration order follows Go map iteration order, so sort `ToSlice` output in tests when order matters.

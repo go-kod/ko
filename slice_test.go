@@ -549,6 +549,80 @@ func TestSeqHelpers(t *testing.T) {
 	}
 }
 
+func TestSeqTerminalAggregates(t *testing.T) {
+	if got := Slice([]int{1, 2, 3}).None(func(item int, _ int) bool {
+		return item > 3
+	}); !got {
+		t.Fatal("none")
+	}
+
+	if got := Slice([]int{1, 2, 3}).None(func(item int, _ int) bool {
+		return item == 2
+	}); got {
+		t.Fatal("none matching")
+	}
+
+	if got, ok := Slice([]string{"go", "gopher", "ko"}).Max(func(left, right string) int {
+		return len(left) - len(right)
+	}); !ok || got != "gopher" {
+		t.Fatalf("max: %q, %v", got, ok)
+	}
+
+	if got, ok := Slice([]string{"go", "gopher", "ko"}).Min(func(left, right string) int {
+		return len(left) - len(right)
+	}); !ok || got != "go" {
+		t.Fatalf("min: %q, %v", got, ok)
+	}
+
+	if _, ok := Empty[int]().Max(func(left, right int) int {
+		return left - right
+	}); ok {
+		t.Fatal("max empty")
+	}
+
+	if got, ok := Slice([]string{"go", "gopher", "ko"}).MaxBy(func(item string, _ int) int {
+		return len(item)
+	}); !ok || got != "gopher" {
+		t.Fatalf("maxBy: %q, %v", got, ok)
+	}
+
+	if got, ok := Slice([]string{"go", "gopher", "ko"}).MaxBy(func(_ string, index int) int {
+		return index
+	}); !ok || got != "ko" {
+		t.Fatalf("maxBy index: %q, %v", got, ok)
+	}
+
+	if got, ok := Slice([]string{"go", "gopher", "ko"}).MinBy(func(item string, _ int) int {
+		return len(item)
+	}); !ok || got != "go" {
+		t.Fatalf("minBy: %q, %v", got, ok)
+	}
+
+	if got := Slice([]string{"go", "gopher", "ko"}).SumBy(func(item string, _ int) int {
+		return len(item)
+	}); got != 10 {
+		t.Fatalf("sumBy: %d", got)
+	}
+
+	if got := Slice([]string{"go", "gopher", "ko"}).SumBy(func(_ string, index int) int {
+		return index
+	}); got != 3 {
+		t.Fatalf("sumBy index: %d", got)
+	}
+
+	if got := Slice([]string{"go", "gopher", "ko"}).MeanBy(func(item string, _ int) int {
+		return len(item)
+	}); got != float64(10)/3 {
+		t.Fatalf("meanBy: %f", got)
+	}
+
+	if got := Empty[string]().MeanBy(func(item string, _ int) int {
+		return len(item)
+	}); got != 0 {
+		t.Fatalf("meanBy empty: %f", got)
+	}
+}
+
 func TestSeqScan(t *testing.T) {
 	got := Slice([]int{1, 2, 3}).Scan(func(sum int, item int, _ int) int {
 		return sum + item
