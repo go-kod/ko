@@ -6,8 +6,12 @@ This repository is a small Go module, `github.com/go-kod/ko`, that provides loda
 
 - Default to using the `grill-with-docs` and `tdd` skills when changing API shape, behavior, or tests.
 - `seq.go` contains the public `Seq` and `Seq2` iterator-backed sequence types.
-- `slice.go` contains ordered-value sequence constructors and `Seq` methods.
-- `map.go` contains key/value sequence constructors and `Seq2` methods.
+- `slice.go` contains ordered-value sequence constructors.
+- `slice_stream.go` contains `Seq` methods that can yield while consuming the source.
+- `slice_collect.go` contains `Seq` methods that need whole-sequence knowledge before yielding a derived sequence or final result, at least for some inputs.
+- `map.go` contains key/value sequence constructors.
+- `map_stream.go` contains `Seq2` methods that can yield while consuming entries.
+- `map_collect.go` contains `Seq2` methods that materialize entries.
 - `slice_test.go` contains the current unit tests for Seq chains.
 - `map_test.go` contains the current unit tests for Seq2 chains.
 - `README.md` documents public usage examples.

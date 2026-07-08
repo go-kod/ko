@@ -40,8 +40,23 @@ func TestOf(t *testing.T) {
 		t.Fatalf("of: %#v", got)
 	}
 
-	if got := Of[int]().Collect(); !reflect.DeepEqual(got, []int{}) {
+	if got := Of[int]().Collect(); len(got) != 0 {
 		t.Fatalf("of empty: %#v", got)
+	}
+}
+
+func TestEmpty(t *testing.T) {
+	seq := Empty[int]()
+	if got := seq.Collect(); len(got) != 0 {
+		t.Fatalf("empty: %#v", got)
+	}
+	if got := seq.Collect(); len(got) != 0 {
+		t.Fatalf("empty should be repeatable: %#v", got)
+	}
+	if got := seq.Map(func(item int, _ int) string {
+		return strconv.Itoa(item)
+	}).Collect(); len(got) != 0 {
+		t.Fatalf("empty map: %#v", got)
 	}
 }
 
@@ -72,7 +87,7 @@ func TestRange(t *testing.T) {
 		t.Fatalf("range descending: %#v", got)
 	}
 
-	if got := Range(2, 2).Collect(); !reflect.DeepEqual(got, []int{}) {
+	if got := Range(2, 2).Collect(); len(got) != 0 {
 		t.Fatalf("range empty: %#v", got)
 	}
 
@@ -106,11 +121,11 @@ func TestRangeStep(t *testing.T) {
 		t.Fatalf("rangeStep descending: %#v", got)
 	}
 
-	if got := RangeStep(1, 8, 0).Collect(); !reflect.DeepEqual(got, []int{}) {
+	if got := RangeStep(1, 8, 0).Collect(); len(got) != 0 {
 		t.Fatalf("rangeStep zero step: %#v", got)
 	}
 
-	if got := RangeStep(1, 8, -1).Collect(); !reflect.DeepEqual(got, []int{}) {
+	if got := RangeStep(1, 8, -1).Collect(); len(got) != 0 {
 		t.Fatalf("rangeStep negative step: %#v", got)
 	}
 
@@ -146,7 +161,7 @@ func TestTimes(t *testing.T) {
 	if got := Times(0, func(index int) int {
 		calls++
 		return index
-	}).Collect(); !reflect.DeepEqual(got, []int{}) {
+	}).Collect(); len(got) != 0 {
 		t.Fatalf("times zero: %#v", got)
 	}
 	if calls != 0 {
@@ -181,11 +196,11 @@ func TestRepeat(t *testing.T) {
 		t.Fatalf("repeat: %#v", got)
 	}
 
-	if got := Repeat(0, "go").Collect(); !reflect.DeepEqual(got, []string{}) {
+	if got := Repeat(0, "go").Collect(); len(got) != 0 {
 		t.Fatalf("repeat zero: %#v", got)
 	}
 
-	if got := Repeat(-1, "go").Collect(); !reflect.DeepEqual(got, []string{}) {
+	if got := Repeat(-1, "go").Collect(); len(got) != 0 {
 		t.Fatalf("repeat negative: %#v", got)
 	}
 
@@ -211,7 +226,7 @@ func TestFromChannel(t *testing.T) {
 	if got := seq.Collect(); !reflect.DeepEqual(got, []int{1, 2}) {
 		t.Fatalf("fromChannel: %#v", got)
 	}
-	if got := seq.Collect(); !reflect.DeepEqual(got, []int{}) {
+	if got := seq.Collect(); len(got) != 0 {
 		t.Fatalf("fromChannel should be one-shot: %#v", got)
 	}
 
@@ -494,6 +509,21 @@ func TestSeqHelpers(t *testing.T) {
 		t.Fatalf("reverse: %#v", got)
 	}
 
+	if got := Slice([]int{3, 1, 2}).Sort(func(left, right int) int {
+		return left - right
+	}).Collect(); !reflect.DeepEqual(got, []int{1, 2, 3}) {
+		t.Fatalf("sort: %#v", got)
+	}
+
+	got := Slice([]string{"aaa", "b", "cc"}).
+		SortBy(func(item string, _ int) int {
+			return len(item)
+		}).
+		Collect()
+	if !reflect.DeepEqual(got, []string{"b", "cc", "aaa"}) {
+		t.Fatalf("sortBy: %#v", got)
+	}
+
 	if got := Slice([]int{1, 2, 3}).Reduce(func(sum int, item int, _ int) int {
 		return sum + item
 	}, 0); got != 6 {
@@ -585,6 +615,27 @@ func TestSeqScanIsLazyAndStopsEarly(t *testing.T) {
 	}
 }
 
+func TestSeqSortByIsLazy(t *testing.T) {
+	calls := 0
+	seq := Slice([]string{"aaa", "b", "cc"}).SortBy(func(item string, _ int) int {
+		calls++
+		return len(item)
+	})
+	if calls != 0 {
+		t.Fatalf("sortBy should be lazy, calls: %d", calls)
+	}
+
+	for item := range seq {
+		if item != "b" {
+			t.Fatalf("sortBy first item: %q", item)
+		}
+		break
+	}
+	if calls != 3 {
+		t.Fatalf("sortBy needs the whole source once consumed, calls: %d", calls)
+	}
+}
+
 func TestSeqTakeWhile(t *testing.T) {
 	got := Slice([]int{1, 2, 3, 2}).
 		TakeWhile(func(item int, _ int) bool {
@@ -618,7 +669,7 @@ func TestSeqFilterThenTake(t *testing.T) {
 		Take(0).
 		Collect()
 
-	if !reflect.DeepEqual(got, []int{}) {
+	if len(got) != 0 {
 		t.Fatalf("zero: %#v", got)
 	}
 }
@@ -640,22 +691,22 @@ func TestSeqSubset(t *testing.T) {
 	}
 
 	got = Slice([]string{"go", "ko"}).Subset(9, 1).Collect()
-	if !reflect.DeepEqual(got, []string{}) {
+	if len(got) != 0 {
 		t.Fatalf("subset overflow: %#v", got)
 	}
 
 	got = Slice([]string{"go", "ko"}).Subset(0, 0).Collect()
-	if !reflect.DeepEqual(got, []string{}) {
+	if len(got) != 0 {
 		t.Fatalf("subset zero: %#v", got)
 	}
 
 	got = Slice([]string{"go", "ko"}).Subset(-1, 0).Collect()
-	if !reflect.DeepEqual(got, []string{}) {
+	if len(got) != 0 {
 		t.Fatalf("subset negative zero: %#v", got)
 	}
 
 	got = Slice([]string{}).Subset(-1, 1).Collect()
-	if !reflect.DeepEqual(got, []string{}) {
+	if len(got) != 0 {
 		t.Fatalf("subset negative empty: %#v", got)
 	}
 }
@@ -865,7 +916,7 @@ func TestSeqFindUniquesBy(t *testing.T) {
 		}).
 		Collect()
 
-	if !reflect.DeepEqual(got, []string{}) {
+	if len(got) != 0 {
 		t.Fatalf("all duplicated: %#v", got)
 	}
 
@@ -898,7 +949,7 @@ func TestSeqFindDuplicatesBy(t *testing.T) {
 		}).
 		Collect()
 
-	if !reflect.DeepEqual(got, []string{}) {
+	if len(got) != 0 {
 		t.Fatalf("no duplicates: %#v", got)
 	}
 
@@ -1260,7 +1311,7 @@ func TestSeqMoreHelpers(t *testing.T) {
 		t.Fatalf("intersperse: %#v", got)
 	}
 
-	if got := Slice([]int{}).Intersperse(0).Collect(); !reflect.DeepEqual(got, []int{}) {
+	if got := Slice([]int{}).Intersperse(0).Collect(); len(got) != 0 {
 		t.Fatalf("intersperse empty: %#v", got)
 	}
 
@@ -1354,7 +1405,7 @@ func TestSeqMoreHelpers(t *testing.T) {
 		t.Fatalf("forEachWhile should stop with range: %d", seen)
 	}
 
-	if got := Slice([]int{1, 2, 3}).Take(0).Collect(); !reflect.DeepEqual(got, []int{}) {
+	if got := Slice([]int{1, 2, 3}).Take(0).Collect(); len(got) != 0 {
 		t.Fatalf("take zero: %#v", got)
 	}
 
@@ -1366,7 +1417,7 @@ func TestSeqMoreHelpers(t *testing.T) {
 		t.Fatalf("take one: %#v", got)
 	}
 
-	if got := Slice([]int{}).Take(2).Collect(); !reflect.DeepEqual(got, []int{}) {
+	if got := Slice([]int{}).Take(2).Collect(); len(got) != 0 {
 		t.Fatalf("take empty: %#v", got)
 	}
 
@@ -1374,7 +1425,7 @@ func TestSeqMoreHelpers(t *testing.T) {
 		t.Fatalf("drop zero: %#v", got)
 	}
 
-	if got := Slice([]int{1, 2, 3}).Drop(9).Collect(); !reflect.DeepEqual(got, []int{}) {
+	if got := Slice([]int{1, 2, 3}).Drop(9).Collect(); len(got) != 0 {
 		t.Fatalf("drop all: %#v", got)
 	}
 
@@ -1389,7 +1440,7 @@ func TestSeqMoreHelpers(t *testing.T) {
 		break
 	}
 
-	if got := Slice([]int{1, 2, 3}).TakeRight(0).Collect(); !reflect.DeepEqual(got, []int{}) {
+	if got := Slice([]int{1, 2, 3}).TakeRight(0).Collect(); len(got) != 0 {
 		t.Fatalf("takeRight zero: %#v", got)
 	}
 
@@ -1397,7 +1448,7 @@ func TestSeqMoreHelpers(t *testing.T) {
 	if got := Slice([]int{1, 2, 3}).Map(func(item int, _ int) int {
 		takeRightCalls++
 		return item
-	}).TakeRight(0).Collect(); !reflect.DeepEqual(got, []int{}) {
+	}).TakeRight(0).Collect(); len(got) != 0 {
 		t.Fatalf("takeRight zero mapped: %#v", got)
 	}
 	if takeRightCalls != 0 {
@@ -1423,7 +1474,7 @@ func TestSeqMoreHelpers(t *testing.T) {
 		break
 	}
 
-	if got := Slice([]int{1, 2, 3}).DropRight(9).Collect(); !reflect.DeepEqual(got, []int{}) {
+	if got := Slice([]int{1, 2, 3}).DropRight(9).Collect(); len(got) != 0 {
 		t.Fatalf("dropRight all: %#v", got)
 	}
 
@@ -1449,7 +1500,7 @@ func TestSeqMoreHelpers(t *testing.T) {
 
 	if got := Slice([]int{1, 2, 3}).DropWhile(func(item int, _ int) bool {
 		return item < 9
-	}).Collect(); !reflect.DeepEqual(got, []int{}) {
+	}).Collect(); len(got) != 0 {
 		t.Fatalf("dropWhile all: %#v", got)
 	}
 
@@ -1461,13 +1512,13 @@ func TestSeqMoreHelpers(t *testing.T) {
 
 	if got := Slice([]int{1, 2, 3}).TakeRightWhile(func(item int, _ int) bool {
 		return item > 9
-	}).Collect(); !reflect.DeepEqual(got, []int{}) {
+	}).Collect(); len(got) != 0 {
 		t.Fatalf("takeRightWhile none: %#v", got)
 	}
 
 	if got := Slice([]int{1, 2, 3}).DropRightWhile(func(item int, _ int) bool {
 		return item < 9
-	}).Collect(); !reflect.DeepEqual(got, []int{}) {
+	}).Collect(); len(got) != 0 {
 		t.Fatalf("dropRightWhile all: %#v", got)
 	}
 

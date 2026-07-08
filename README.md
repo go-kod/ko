@@ -14,7 +14,7 @@ go get github.com/go-kod/ko
 
 ## Seq Chains
 
-Start with `ko.Slice`, `ko.Of`, `ko.Generate`, `ko.Range`, `ko.RangeStep`, `ko.Times`, `ko.Repeat`, or `ko.FromChannel`, chain operations on `ko.Seq[T]`, then call `Collect` for the final slice. `Seq[T]` is iterator-backed and can be ranged directly; lazy operations stay lazy until range, `Collect`, or a terminal/materializing method consumes them.
+Start with `ko.Slice`, `ko.Of`, `ko.Empty`, `ko.Generate`, `ko.Range`, `ko.RangeStep`, `ko.Times`, `ko.Repeat`, or `ko.FromChannel`, chain operations on `ko.Seq[T]`, then call `Collect` for the final slice. `Seq[T]` is iterator-backed and can be ranged directly; lazy operations stay lazy until range, `Collect`, or a terminal/materializing method consumes them.
 
 ```go
 package main
@@ -73,6 +73,8 @@ Seq methods:
 | `DropByIndex(indexes...)` | `Seq[T]` | Drops items by index. Negative indexes count from the end. |
 | `DropWhile(predicate)` | `Seq[T]` | Drops the leading items while the predicate is true. |
 | `DropRightWhile(predicate)` | `Seq[T]` | Drops the trailing items while the predicate is true. |
+| `Sort(compare)` | `Seq[T]` | Returns a stably sorted copy using a `slices.SortFunc`-style comparator. |
+| `SortBy(mapper)` | `Seq[T]` | Returns a stably sorted copy using mapped ordered keys. |
 | `Reverse()` | `Seq[T]` | Returns a reversed copy. |
 | `Reduce(accumulator, initial)` | `R` | Folds the slice into one value. |
 | `ReduceRight(accumulator, initial)` | `R` | Folds the slice from right to left. |
@@ -219,7 +221,7 @@ sort.Strings(keys)
 - `FromChannel` is one-shot because it drains the source channel as it is consumed.
 - `FilterReject` returns two sequences backed by one shared source; each side advances the source only far enough to find its next item and reuses cached split results.
 - `ForEach` and `ForEachWhile` are pass-through chain methods; their callbacks run when the returned chain is consumed.
-- Methods that need suffix, reverse, or whole-sequence knowledge buffer only when consumed, such as `Reverse`, `ReduceRight`, negative `Nth`, negative-offset `Subset`, right-side `While` methods, grouping, and uniqueness-by-count helpers.
+- Methods that need suffix, sort, reverse, or whole-sequence knowledge buffer only when consumed, such as `Sort`, `SortBy`, `Reverse`, `ReduceRight`, negative `Nth`, negative-offset `Subset`, right-side `While` methods, grouping, and uniqueness-by-count helpers.
 - This package intentionally stays small. Prefer Go's standard library when it already covers the job.
 
 ## Development
