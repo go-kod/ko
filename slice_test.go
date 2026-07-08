@@ -502,6 +502,15 @@ func TestSeqLazyMiddleOperationsStopEarly(t *testing.T) {
 		}
 		break
 	}
+
+	for item := range Slice([]int{3, 1, 2}).Sort(func(left, right int) int {
+		return left - right
+	}) {
+		if item != 1 {
+			t.Fatalf("sort item: %d", item)
+		}
+		break
+	}
 }
 
 func TestSeqHelpers(t *testing.T) {
@@ -874,6 +883,40 @@ func TestSeqDropByPositiveIndexStopsEarly(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("calls: %d", calls)
+	}
+}
+
+func TestSeqCollectBackedOperationsStopYielding(t *testing.T) {
+	for item := range Slice([]int{1, 2, 3}).Subset(-2, 2) {
+		if item != 2 {
+			t.Fatalf("subset item: %d", item)
+		}
+		break
+	}
+
+	for item := range Slice([]int{1, 2, 3}).TakeRightWhile(func(item int, _ int) bool {
+		return item > 1
+	}) {
+		if item != 2 {
+			t.Fatalf("takeRightWhile item: %d", item)
+		}
+		break
+	}
+
+	for item := range Slice([]int{1, 2, 3}).DropByIndex(-1) {
+		if item != 1 {
+			t.Fatalf("dropByIndex item: %d", item)
+		}
+		break
+	}
+
+	for item := range Slice([]int{1, 2, 3}).DropRightWhile(func(item int, _ int) bool {
+		return item > 1
+	}) {
+		if item != 1 {
+			t.Fatalf("dropRightWhile item: %d", item)
+		}
+		break
 	}
 }
 

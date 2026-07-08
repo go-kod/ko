@@ -5,7 +5,7 @@
 This repository is a small Go module, `github.com/go-kod/ko`, that provides lodash-style generic helpers for Go collections.
 
 - Default to using the `grill-with-docs` and `tdd` skills when changing API shape, behavior, or tests.
-- `seq.go` contains the public `Seq` and `Seq2` iterator-backed sequence types.
+- `types.go` contains the public `Seq` and `Seq2` iterator-backed sequence types.
 - `slice.go` contains ordered-value sequence constructors.
 - `slice_stream.go` contains `Seq` methods that can yield while consuming the source.
 - `slice_collect.go` contains `Seq` methods that need whole-sequence knowledge before yielding a derived sequence or final result, at least for some inputs.

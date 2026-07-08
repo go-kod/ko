@@ -119,15 +119,11 @@ func (c Seq[T]) TakeRight(n int) Seq[T] {
 		if n <= 0 {
 			return
 		}
-		buf := make([]T, 0, n)
-		for item := range iter.Seq[T](c) {
-			if len(buf) < n {
-				buf = append(buf, item)
-				continue
-			}
-			buf = append(slices.Delete(buf, 0, 1), item)
+		items := c.Collect()
+		if n < len(items) {
+			items = items[len(items)-n:]
 		}
-		for _, item := range buf {
+		for item := range Slice(items) {
 			if !yield(item) {
 				return
 			}
@@ -159,25 +155,37 @@ func (c Seq[T]) Subset(offset, length int) Seq[T] {
 			}
 		})
 	}
-	return Seq[T](materializeSeq(iter.Seq[T](c), func(items []T) []T {
-		return subset(items, offset, length)
-	}))
+	return Seq[T](func(yield func(T) bool) {
+		for item := range Slice(subset(c.Collect(), offset, length)) {
+			if !yield(item) {
+				return
+			}
+		}
+	})
 }
 
 // TakeRightWhile keeps items from the end while predicate returns true.
 func (c Seq[T]) TakeRightWhile(predicate func(item T, index int) bool) Seq[T] {
-	return Seq[T](materializeSeq(iter.Seq[T](c), func(items []T) []T {
-		return takeRightWhile(items, predicate)
-	}))
+	return Seq[T](func(yield func(T) bool) {
+		for item := range Slice(takeRightWhile(c.Collect(), predicate)) {
+			if !yield(item) {
+				return
+			}
+		}
+	})
 }
 
 // DropByIndex drops items by index. Negative indexes count from the end.
 func (c Seq[T]) DropByIndex(indexes ...int) Seq[T] {
 	for _, index := range indexes {
 		if index < 0 {
-			return Seq[T](materializeSeq(iter.Seq[T](c), func(items []T) []T {
-				return dropByIndex(items, indexes...)
-			}))
+			return Seq[T](func(yield func(T) bool) {
+				for item := range Slice(dropByIndex(c.Collect(), indexes...)) {
+					if !yield(item) {
+						return
+					}
+				}
+			})
 		}
 	}
 	drop := make(map[int]struct{}, len(indexes))
@@ -201,17 +209,26 @@ func (c Seq[T]) DropByIndex(indexes ...int) Seq[T] {
 
 // DropRightWhile drops items from the end while predicate returns true.
 func (c Seq[T]) DropRightWhile(predicate func(item T, index int) bool) Seq[T] {
-	return Seq[T](materializeSeq(iter.Seq[T](c), func(items []T) []T {
-		return dropRightWhile(items, predicate)
-	}))
+	return Seq[T](func(yield func(T) bool) {
+		for item := range Slice(dropRightWhile(c.Collect(), predicate)) {
+			if !yield(item) {
+				return
+			}
+		}
+	})
 }
 
 // Sort returns a stably sorted copy using compare.
 func (c Seq[T]) Sort(compare func(left, right T) int) Seq[T] {
-	return Seq[T](materializeSeq(iter.Seq[T](c), func(items []T) []T {
+	return Seq[T](func(yield func(T) bool) {
+		items := c.Collect()
 		slices.SortStableFunc(items, compare)
-		return items
-	}))
+		for item := range Slice(items) {
+			if !yield(item) {
+				return
+			}
+		}
+	})
 }
 
 // SortBy returns a stably sorted copy using mapped ordered keys.
@@ -221,11 +238,10 @@ func (c Seq[T]) SortBy[K cmp.Ordered](mapper func(item T, index int) K) Seq[T] {
 			item T
 			key  K
 		}
-		entries := []entry{}
-		i := 0
-		for item := range iter.Seq[T](c) {
+		items := c.Collect()
+		entries := make([]entry, 0, len(items))
+		for i, item := range items {
 			entries = append(entries, entry{item: item, key: mapper(item, i)})
-			i++
 		}
 		slices.SortStableFunc(entries, func(left, right entry) int {
 			return cmp.Compare(left.key, right.key)
@@ -240,11 +256,15 @@ func (c Seq[T]) SortBy[K cmp.Ordered](mapper func(item T, index int) K) Seq[T] {
 
 // Reverse returns a reversed copy.
 func (c Seq[T]) Reverse() Seq[T] {
-	return Seq[T](materializeSeq(iter.Seq[T](c), func(items []T) []T {
-		result := slices.Clone(items)
-		slices.Reverse(result)
-		return result
-	}))
+	return Seq[T](func(yield func(T) bool) {
+		items := c.Collect()
+		slices.Reverse(items)
+		for item := range Slice(items) {
+			if !yield(item) {
+				return
+			}
+		}
+	})
 }
 
 // ReduceRight folds items from right to left.
@@ -291,7 +311,7 @@ func (c Seq[T]) MaxBy[K cmp.Ordered](mapper func(item T, index int) K) (T, bool)
 	i := 0
 	for item := range iter.Seq[T](c) {
 		key := mapper(item, i)
-		if !ok || cmp.Compare(bestKey, key) < 0 {
+		if !ok || cmp.Less(bestKey, key) {
 			best = item
 			bestKey = key
 			ok = true
@@ -309,7 +329,7 @@ func (c Seq[T]) MinBy[K cmp.Ordered](mapper func(item T, index int) K) (T, bool)
 	i := 0
 	for item := range iter.Seq[T](c) {
 		key := mapper(item, i)
-		if !ok || cmp.Compare(key, bestKey) < 0 {
+		if !ok || cmp.Less(key, bestKey) {
 			best = item
 			bestKey = key
 			ok = true
@@ -392,16 +412,6 @@ func (c Seq[T]) Nth(index int) (T, bool) {
 	return items[index], true
 }
 
-func materializeSeq[T any](seq iter.Seq[T], transform func([]T) []T) iter.Seq[T] {
-	return func(yield func(T) bool) {
-		for _, item := range transform(slices.Collect(seq)) {
-			if !yield(item) {
-				return
-			}
-		}
-	}
-}
-
 func findUniquesBySeq[T any, K comparable](seq iter.Seq[T], mapper func(item T, index int) K) iter.Seq[T] {
 	return func(yield func(T) bool) {
 		counts := make(map[K]int)
@@ -464,16 +474,16 @@ func subset[T any](collection []T, offset, length int) []T {
 	if end > len(collection) {
 		end = len(collection)
 	}
-	return slices.Clone(collection[offset:end])
+	return collection[offset:end]
 }
 
 func takeRightWhile[T any](collection []T, predicate func(item T, index int) bool) []T {
 	for i := len(collection) - 1; i >= 0; i-- {
 		if !predicate(collection[i], i) {
-			return slices.Clone(collection[i+1:])
+			return collection[i+1:]
 		}
 	}
-	return slices.Clone(collection)
+	return collection
 }
 
 func dropByIndex[T any](collection []T, indexes ...int) []T {
@@ -498,7 +508,7 @@ func dropByIndex[T any](collection []T, indexes ...int) []T {
 func dropRightWhile[T any](collection []T, predicate func(item T, index int) bool) []T {
 	for i := len(collection) - 1; i >= 0; i-- {
 		if !predicate(collection[i], i) {
-			return slices.Clone(collection[:i+1])
+			return collection[:i+1]
 		}
 	}
 	return []T{}
