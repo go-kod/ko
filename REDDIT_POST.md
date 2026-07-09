@@ -95,17 +95,7 @@ got := ko.Range(1, 6).
 // []int{1, 3, 5}
 ```
 
-For infinite generated sequences, the caller uses normal chain methods to bound consumption:
-
-```go
-got := ko.Generate(1, func(item int) int {
-	return item * 2
-}).Take(4).Collect()
-
-// []int{1, 2, 4, 8}
-```
-
-Some of the API surface includes `Filter`, `Reject`, `Map`, `FilterMap`, `FlatMap`, `UniqBy`, `Chunk`, `Window`, `GroupBy`, `CountBy`, `Keys`, `Values`, and `ToSlice`.
+Some of the API surface includes `Filter`, `Reject`, `Map`, `FilterMap`, `FlatMap`, `DistinctBy`, `Chunk`, `Window`, `GroupBy`, `Keys`, `Values`, and `ToSlice`.
 
 I would appreciate critical feedback on the API shape:
 

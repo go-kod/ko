@@ -69,20 +69,6 @@ func TestSeq2ToSlice(t *testing.T) {
 	}
 }
 
-func TestSeq2FilterMapToSlice(t *testing.T) {
-	got := Map(map[string]int{"a": 1, "b": 2, "c": 3}).
-		FilterMapToSlice(func(key string, value int) (string, bool) {
-			return key + strconv.Itoa(value), value%2 == 1
-		}).
-		Collect()
-	sort.Strings(got)
-
-	want := []string{"a1", "c3"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %#v, want %#v", got, want)
-	}
-}
-
 func TestSeq2Iteration(t *testing.T) {
 	got := map[string]int{}
 	for key, value := range Map(map[string]int{"a": 1, "b": 2}) {
@@ -113,10 +99,6 @@ func TestSeq2LazyOperationsStopEarly(t *testing.T) {
 	}
 
 	for range Map(map[string]int{"a": 1, "b": 2}).OmitKeys() {
-		break
-	}
-
-	for range Map(map[string]int{"a": 1}).Assign(map[string]int{"b": 2}) {
 		break
 	}
 
@@ -202,18 +184,6 @@ func TestSeq2LazyOperationsStopEarly(t *testing.T) {
 		t.Fatalf("toSlice calls: %d", toSliceCalls)
 	}
 
-	filterMapCalls := 0
-	for range Map(map[string]int{"a": 1, "b": 2}).
-		FilterMapToSlice(func(key string, value int) (string, bool) {
-			filterMapCalls++
-			return key + strconv.Itoa(value), true
-		}) {
-		break
-	}
-	if filterMapCalls != 1 {
-		t.Fatalf("filterMap calls: %d", filterMapCalls)
-	}
-
 	toMapCalls := 0
 	for range Slice([]int{1, 2, 3}).
 		ToMap(func(item int, _ int) (int, int) {
@@ -234,9 +204,6 @@ func TestSeq2ReturningMethodsAreLazyUntilConsumed(t *testing.T) {
 	assertLazySeq2(t, "omitKeys", func(seq Seq2[string, int]) Seq2[string, int] {
 		return seq.OmitKeys("b")
 	}, 1, "a", 1)
-	assertLazySeq2(t, "assign", func(seq Seq2[string, int]) Seq2[string, int] {
-		return seq.Assign(map[string]int{"b": 20})
-	}, 1, "a", 1)
 	assertLazySeq2(t, "filter", func(seq Seq2[string, int]) Seq2[string, int] {
 		return seq.Filter(func(_ string, value int) bool { return value > 0 })
 	}, 1, "a", 1)
@@ -252,10 +219,6 @@ func TestSeq2ReturningMethodsAreLazyUntilConsumed(t *testing.T) {
 	assertLazySeq2(t, "mapValues", func(seq Seq2[string, int]) Seq2[string, int] {
 		return seq.MapValues(func(_ string, value int) int { return value * 10 })
 	}, 1, "a", 10)
-	assertLazySeq2(t, "forEach", func(seq Seq2[string, int]) Seq2[string, int] {
-		return seq.ForEach(func(_ string, _ int) {})
-	}, 1, "a", 1)
-
 	calls := 0
 	empty := lazySeq2(&calls).PickKeys()
 	if calls != 0 {
@@ -279,57 +242,6 @@ func TestSeq2SliceReturningMethodsAreLazyUntilConsumed(t *testing.T) {
 	assertLazySeq2ToSeq(t, "toSlice", func(seq Seq2[string, int]) Seq[string] {
 		return seq.ToSlice(func(key string, value int) string { return key + strconv.Itoa(value) })
 	}, 1, "a1")
-	assertLazySeq2ToSeq(t, "filterMapToSlice", func(seq Seq2[string, int]) Seq[string] {
-		return seq.FilterMapToSlice(func(key string, value int) (string, bool) {
-			return key + strconv.Itoa(value), true
-		})
-	}, 1, "a1")
-}
-
-func TestSeq2ChunkEntriesIsLazyUntilConsumed(t *testing.T) {
-	calls := 0
-	seq := lazySeq2(&calls).ChunkEntries(2)
-	if calls != 0 {
-		t.Fatalf("chunkEntries called before consumption: %d", calls)
-	}
-	for chunk := range seq {
-		if got := chunk.Collect(); !reflect.DeepEqual(got, map[string]int{"a": 1, "b": 2}) {
-			t.Fatalf("chunkEntries chunk: %#v", got)
-		}
-		break
-	}
-	if calls != 2 {
-		t.Fatalf("chunkEntries calls: %d", calls)
-	}
-}
-
-func TestSeq2ChunkEntries(t *testing.T) {
-	chunks := []map[string]int{}
-	for chunk := range Map(map[string]int{"a": 1, "b": 2, "c": 3}).ChunkEntries(2) {
-		chunks = append(chunks, chunk.Collect())
-	}
-	if len(chunks) != 2 {
-		t.Fatalf("chunks: %#v", chunks)
-	}
-
-	merged := map[string]int{}
-	for _, chunk := range chunks {
-		if len(chunk) > 2 {
-			t.Fatalf("chunk too large: %#v", chunk)
-		}
-		for key, value := range chunk {
-			merged[key] = value
-		}
-	}
-
-	want := map[string]int{"a": 1, "b": 2, "c": 3}
-	if !reflect.DeepEqual(merged, want) {
-		t.Fatalf("merged %#v, want %#v", merged, want)
-	}
-
-	for chunk := range Map(map[string]int{}).ChunkEntries(2) {
-		t.Fatalf("empty chunk: %#v", chunk.Collect())
-	}
 }
 
 func lazySeq2(calls *int) Seq2[string, int] {
@@ -378,129 +290,6 @@ func assertLazySeq2ToSeq(t *testing.T, name string, build func(Seq2[string, int]
 	}
 	if calls != wantCalls {
 		t.Fatalf("%s calls: %d", name, calls)
-	}
-}
-
-func TestSeq2ChunkEntriesStopsEarly(t *testing.T) {
-	calls := 0
-	for chunk := range Map(map[int]int{1: 1, 2: 2, 3: 3}).
-		MapValues(func(_ int, value int) int {
-			calls++
-			return value
-		}).
-		ChunkEntries(2) {
-		if got := chunk.Collect(); len(got) != 2 {
-			t.Fatalf("chunk: %#v", got)
-		}
-		break
-	}
-	if calls != 2 {
-		t.Fatalf("calls: %d", calls)
-	}
-}
-
-func TestSeq2ChunkEntriesCountsDuplicateKeysAsEntries(t *testing.T) {
-	chunks := []map[string]int{}
-	var firstChunkValues []int
-	for chunk := range Seq2[string, int](func(yield func(string, int) bool) {
-		if !yield("x", 1) {
-			return
-		}
-		if !yield("x", 2) {
-			return
-		}
-		yield("y", 3)
-	}).ChunkEntries(2) {
-		if len(chunks) == 0 {
-			for key, value := range chunk {
-				if key != "x" {
-					t.Fatalf("first chunk key: %q", key)
-				}
-				firstChunkValues = append(firstChunkValues, value)
-			}
-		}
-		chunks = append(chunks, chunk.Collect())
-	}
-
-	if !reflect.DeepEqual(firstChunkValues, []int{1, 2}) {
-		t.Fatalf("first chunk values: %#v", firstChunkValues)
-	}
-
-	for chunk := range Seq2[string, int](func(yield func(string, int) bool) {
-		if !yield("x", 1) {
-			return
-		}
-		yield("x", 2)
-	}).ChunkEntries(2) {
-		for _, value := range chunk {
-			if value != 1 {
-				t.Fatalf("first chunk value: %d", value)
-			}
-			break
-		}
-		break
-	}
-
-	want := []map[string]int{{"x": 2}, {"y": 3}}
-	if !reflect.DeepEqual(chunks, want) {
-		t.Fatalf("got %#v, want %#v", chunks, want)
-	}
-}
-
-func TestSeq2ChunkEntriesZeroSizeYieldsNothing(t *testing.T) {
-	for chunk := range Map(map[string]int{"a": 1}).ChunkEntries(0) {
-		t.Fatalf("unexpected chunk: %#v", chunk.Collect())
-	}
-}
-
-func TestSeq2Assign(t *testing.T) {
-	base := map[string]int{"a": 1, "b": 2}
-	got := Map(base).
-		Assign(map[string]int{"b": 20}, map[string]int{"c": 3}).
-		Collect()
-
-	want := map[string]int{"a": 1, "b": 20, "c": 3}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %#v, want %#v", got, want)
-	}
-
-	if !reflect.DeepEqual(base, map[string]int{"a": 1, "b": 2}) {
-		t.Fatalf("base mutated: %#v", base)
-	}
-}
-
-func TestSeq2AssignStopsEarly(t *testing.T) {
-	calls := 0
-	for key, value := range Seq2[string, int](func(yield func(string, int) bool) {
-		calls++
-		if !yield("a", 1) {
-			return
-		}
-		calls++
-		yield("b", 2)
-	}).Assign(map[string]int{"b": 20}) {
-		if key != "a" || value != 1 {
-			t.Fatalf("entry: %q %d", key, value)
-		}
-		break
-	}
-	if calls != 1 {
-		t.Fatalf("calls: %d", calls)
-	}
-}
-
-func TestSeq2AssignLaterMapsReplaceEarlierMaps(t *testing.T) {
-	seen := 0
-	for key, value := range Map(map[string]int{}).
-		Assign(map[string]int{"a": 1}, map[string]int{"a": 2}) {
-		seen++
-		if key != "a" || value != 2 {
-			t.Fatalf("entry: %q %d", key, value)
-		}
-		break
-	}
-	if seen != 1 {
-		t.Fatalf("seen: %d", seen)
 	}
 }
 
@@ -571,26 +360,6 @@ func TestSeq2FilterThenValues(t *testing.T) {
 		Collect()
 	if len(got) != 0 {
 		t.Fatalf("filter then values miss: %#v", got)
-	}
-}
-
-func TestSeq2Lookup(t *testing.T) {
-	chain := Map(map[string]int{"a": 1})
-
-	if !chain.HasKey("a") {
-		t.Fatal("hasKey: false")
-	}
-
-	if chain.HasKey("b") {
-		t.Fatal("hasKey miss: true")
-	}
-
-	if got := chain.ValueOr("a", 9); got != 1 {
-		t.Fatalf("valueOr: %d", got)
-	}
-
-	if got := chain.ValueOr("b", 9); got != 9 {
-		t.Fatalf("valueOr miss: %d", got)
 	}
 }
 
@@ -730,30 +499,6 @@ func TestSeq2MoreHelpers(t *testing.T) {
 	want := map[string]int{"bb": 2}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %#v, want %#v", got, want)
-	}
-
-	sum := 0
-	seq := Map(map[string]int{"a": 1, "b": 2}).ForEach(func(_ string, value int) {
-		sum += value
-	})
-	if sum != 0 {
-		t.Fatalf("forEach should be lazy: %d", sum)
-	}
-	if got := seq.Collect(); !reflect.DeepEqual(got, map[string]int{"a": 1, "b": 2}) {
-		t.Fatalf("forEach value: %#v", got)
-	}
-	if sum != 3 {
-		t.Fatalf("forEach: %d", sum)
-	}
-
-	sum = 0
-	for range Map(map[string]int{"a": 1, "b": 2}).ForEach(func(_ string, value int) {
-		sum += value
-	}) {
-		break
-	}
-	if sum == 0 || sum == 3 {
-		t.Fatalf("forEach should stop after one entry, sum: %d", sum)
 	}
 
 	if got := Map(map[string]int{"a": 1}).Some(func(_ string, value int) bool {

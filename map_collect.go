@@ -12,25 +12,6 @@ func (c Seq2[K, V]) Collect() map[K]V {
 	return maps.Collect(iter.Seq2[K, V](c))
 }
 
-// HasKey reports whether key exists in the map.
-func (c Seq2[K, V]) HasKey(key K) bool {
-	_, _, ok := c.Find(func(itemKey K, _ V) bool {
-		return itemKey == key
-	})
-	return ok
-}
-
-// ValueOr returns the value for key, or fallback when key is absent.
-func (c Seq2[K, V]) ValueOr(key K, fallback V) V {
-	_, value, ok := c.Find(func(itemKey K, _ V) bool {
-		return itemKey == key
-	})
-	if !ok {
-		return fallback
-	}
-	return value
-}
-
 // IsEmpty reports whether the sequence yields no entries.
 func (c Seq2[K, V]) IsEmpty() bool {
 	return !c.Some(func(_ K, _ V) bool {

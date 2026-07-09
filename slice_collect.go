@@ -14,21 +14,6 @@ func (c Seq[T]) Collect() []T {
 	return slices.Collect(iter.Seq[T](c))
 }
 
-// IsDistinctBy reports whether all mapped keys are distinct.
-func (c Seq[T]) IsDistinctBy[K comparable](mapper func(item T, index int) K) bool {
-	seen := make(map[K]struct{})
-	i := 0
-	for item := range iter.Seq[T](c) {
-		key := mapper(item, i)
-		if _, ok := seen[key]; ok {
-			return false
-		}
-		seen[key] = struct{}{}
-		i++
-	}
-	return true
-}
-
 // Reduce folds collection into one value.
 func (c Seq[T]) Reduce[R any](accumulator func(agg R, item T, index int) R, initial R) R {
 	result := initial
@@ -36,16 +21,6 @@ func (c Seq[T]) Reduce[R any](accumulator func(agg R, item T, index int) R, init
 	for item := range iter.Seq[T](c) {
 		result = accumulator(result, item, i)
 		i++
-	}
-	return result
-}
-
-// ReduceRight folds items from right to left.
-func (c Seq[T]) ReduceRight[R any](accumulator func(agg R, item T, index int) R, initial R) R {
-	items := c.Collect()
-	result := initial
-	for i, item := range slices.Backward(items) {
-		result = accumulator(result, item, i)
 	}
 	return result
 }
@@ -99,20 +74,16 @@ func (c Seq[T]) Every(predicate func(item T, index int) bool) bool {
 	})
 }
 
-// None reports whether no item matches predicate.
-func (c Seq[T]) None(predicate func(item T, index int) bool) bool {
-	return !c.Some(predicate)
-}
-
 // Find returns the first matching item.
 func (c Seq[T]) Find(predicate func(item T, index int) bool) (T, bool) {
 	item, _, ok := findSeq(iter.Seq[T](c), predicate)
 	return item, ok
 }
 
-// FindIndex returns the first matching item, its index, and whether it was found.
-func (c Seq[T]) FindIndex(predicate func(item T, index int) bool) (T, int, bool) {
-	return findSeq(iter.Seq[T](c), predicate)
+// FindIndex returns the first matching item's index.
+func (c Seq[T]) FindIndex(predicate func(item T, index int) bool) (int, bool) {
+	_, index, ok := findSeq(iter.Seq[T](c), predicate)
+	return index, ok
 }
 
 // First returns the first item.
@@ -120,32 +91,6 @@ func (c Seq[T]) First() (T, bool) {
 	return c.Find(func(_ T, _ int) bool {
 		return true
 	})
-}
-
-// Max returns the greatest item by compare.
-func (c Seq[T]) Max(compare func(left, right T) int) (T, bool) {
-	var best T
-	ok := false
-	for item := range iter.Seq[T](c) {
-		if !ok || compare(best, item) < 0 {
-			best = item
-			ok = true
-		}
-	}
-	return best, ok
-}
-
-// Min returns the least item by compare.
-func (c Seq[T]) Min(compare func(left, right T) int) (T, bool) {
-	var best T
-	ok := false
-	for item := range iter.Seq[T](c) {
-		if !ok || compare(item, best) < 0 {
-			best = item
-			ok = true
-		}
-	}
-	return best, ok
 }
 
 // MaxBy returns the item with the greatest mapped ordered key.
@@ -207,27 +152,6 @@ func (c Seq[T]) MeanBy[N Numeric](mapper func(item T, index int) N) float64 {
 		return 0
 	}
 	return float64(sum) / float64(count)
-}
-
-// FindLast returns the last matching item.
-func (c Seq[T]) FindLast(predicate func(item T, index int) bool) (T, bool) {
-	candidate, _, ok := c.FindLastIndex(predicate)
-	return candidate, ok
-}
-
-// FindLastIndex returns the last matching item, its index, and whether it was found.
-func (c Seq[T]) FindLastIndex(predicate func(item T, index int) bool) (T, int, bool) {
-	var result T
-	resultIndex := -1
-	i := 0
-	for item := range iter.Seq[T](c) {
-		if predicate(item, i) {
-			result = item
-			resultIndex = i
-		}
-		i++
-	}
-	return result, resultIndex, resultIndex >= 0
 }
 
 // Last returns the last item.

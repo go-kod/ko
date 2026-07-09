@@ -12,7 +12,10 @@ import (
 )
 
 func ExampleOf() {
-	got := ko.Distinct(ko.Of(1, 2, 2, 3, 4)).
+	got := ko.Of(1, 2, 2, 3, 4).
+		DistinctBy(func(item int, _ int) int {
+			return item
+		}).
 		Filter(func(item int, _ int) bool {
 			return item%2 == 0
 		}).
@@ -78,10 +81,7 @@ func ExampleSlice_takeRight() {
 }
 
 func ExampleSlice_mapChunks() {
-	got := ko.Seq[ko.Seq[int]](ko.Slice([]int{1, 2, 3, 4, 5}).Chunk(2)).
-		Filter(func(chunk ko.Seq[int], _ int) bool {
-			return len(chunk.Collect()) == 2
-		}).
+	got := ko.Slice([]int{1, 2, 3, 4}).Chunk(2).
 		Map(func(chunk ko.Seq[int], _ int) int {
 			items := chunk.Collect()
 			return items[0] + items[1]
