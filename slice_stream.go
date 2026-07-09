@@ -3,6 +3,7 @@ package ko
 import (
 	"cmp"
 	"iter"
+	"maps"
 	"slices"
 )
 
@@ -89,7 +90,7 @@ func (c Seq[T]) Enumerate() Seq2[int, T] {
 
 // GroupBy groups items by key, preserving first key order.
 func (c Seq[T]) GroupBy[K comparable](mapper func(item T, index int) K) groupedSeq[K, T] {
-	return groupedSeq[K, T](func(yield func(K, Seq[T]) bool) {
+	return groupedSeq[K, T](func(yield func(K, []T) bool) {
 		result := make(map[K][]T)
 		order := make([]K, 0)
 		i := 0
@@ -102,7 +103,7 @@ func (c Seq[T]) GroupBy[K comparable](mapper func(item T, index int) K) groupedS
 			i++
 		}
 		for _, key := range order {
-			if !yield(key, Seq[T](slices.Values(result[key]))) {
+			if !yield(key, slices.Clone(result[key])) {
 				return
 			}
 		}
@@ -127,9 +128,9 @@ func (c Seq[T]) Concat(other iter.Seq[T]) Seq[T] {
 
 // Chunk splits items into non-overlapping chunks of size n.
 func (c Seq[T]) Chunk(n int) seqSeq[T] {
-	return seqSeq[T](func(yield func(Seq[T]) bool) {
+	return seqSeq[T](func(yield func([]T) bool) {
 		for chunk := range chunkSeq(iter.Seq[T](c), n) {
-			if !yield(Seq[T](slices.Values(chunk))) {
+			if !yield(chunk) {
 				return
 			}
 		}
@@ -138,9 +139,9 @@ func (c Seq[T]) Chunk(n int) seqSeq[T] {
 
 // Window splits items into overlapping windows of size n, advancing by step.
 func (c Seq[T]) Window(n, step int) seqSeq[T] {
-	return seqSeq[T](func(yield func(Seq[T]) bool) {
+	return seqSeq[T](func(yield func([]T) bool) {
 		for window := range windowSeq(iter.Seq[T](c), n, step) {
-			if !yield(Seq[T](slices.Values(window))) {
+			if !yield(window) {
 				return
 			}
 		}
@@ -343,11 +344,11 @@ func (c Seq[T]) Reverse() Seq[T] {
 	})
 }
 
-// Map transforms each inner sequence and returns a normal Seq.
-func (s seqSeq[T]) Map[R any](mapper func(item Seq[T], index int) R) Seq[R] {
+// Map transforms each inner slice and returns a normal Seq.
+func (s seqSeq[T]) Map[R any](mapper func(item []T, index int) R) Seq[R] {
 	return Seq[R](func(yield func(R) bool) {
 		i := 0
-		for item := range iter.Seq[Seq[T]](s) {
+		for item := range iter.Seq[[]T](s) {
 			if !yield(mapper(item, i)) {
 				return
 			}
@@ -358,17 +359,13 @@ func (s seqSeq[T]) Map[R any](mapper func(item Seq[T], index int) R) Seq[R] {
 
 // Collect materializes the outer and inner sequences.
 func (s seqSeq[T]) Collect() [][]T {
-	var result [][]T
-	for item := range iter.Seq[Seq[T]](s) {
-		result = append(result, item.Collect())
-	}
-	return result
+	return slices.Collect(iter.Seq[[]T](s))
 }
 
 // Map transforms each grouped entry and returns a normal Seq.
-func (g groupedSeq[K, V]) Map[R any](mapper func(key K, group Seq[V]) R) Seq[R] {
+func (g groupedSeq[K, V]) Map[R any](mapper func(key K, group []V) R) Seq[R] {
 	return Seq[R](func(yield func(R) bool) {
-		for key, group := range iter.Seq2[K, Seq[V]](g) {
+		for key, group := range iter.Seq2[K, []V](g) {
 			if !yield(mapper(key, group)) {
 				return
 			}
@@ -378,11 +375,7 @@ func (g groupedSeq[K, V]) Map[R any](mapper func(key K, group Seq[V]) R) Seq[R] 
 
 // Collect materializes groups into slices.
 func (g groupedSeq[K, V]) Collect() map[K][]V {
-	result := make(map[K][]V)
-	for key, group := range iter.Seq2[K, Seq[V]](g) {
-		result[key] = group.Collect()
-	}
-	return result
+	return maps.Collect(iter.Seq2[K, []V](g))
 }
 
 func distinctBySeq[T any, K comparable](seq iter.Seq[T], mapper func(item T, index int) K) iter.Seq[T] {

@@ -69,13 +69,12 @@ Seq methods:
 | `Chunk(n)` | unexported adapter | Splits into chunks. `n <= 0` yields nothing. |
 | `Window(n, step)` | unexported adapter | Splits into overlapping windows. `n <= 0` or `step <= 0` yields nothing. |
 
-`Chunk` and `Window` return unexported adapter types. They can be ranged directly, collected to `[][]T`, or mapped without naming the adapter type.
+`Chunk` and `Window` return unexported adapter types. They can be ranged directly, collected to `[][]T`, or mapped as `[]T` values without naming the adapter type.
 
 ```go
 sums := ko.Slice([]int{1, 2, 3, 4}).Chunk(2).
-	Map(func(chunk ko.Seq[int], _ int) int {
-		items := chunk.Collect()
-		return items[0] + items[1]
+	Map(func(chunk []int, _ int) int {
+		return chunk[0] + chunk[1]
 	}).
 	Collect()
 
@@ -86,7 +85,7 @@ sums := ko.Slice([]int{1, 2, 3, 4}).Chunk(2).
 
 ## Seq to Seq2
 
-Use `ToMap` or `Enumerate` when a `Seq` should become `Seq2`. `GroupBy` returns an unexported grouped adapter whose grouped values are `ko.Seq`; grouped keys are yielded in first-seen order.
+Use `ToMap` or `Enumerate` when a `Seq` should become `Seq2`. `GroupBy` returns an unexported grouped adapter whose grouped values are slices; grouped keys are yielded in first-seen order.
 
 ```go
 byLength := ko.Slice([]string{"go", "ko", "kod"}).

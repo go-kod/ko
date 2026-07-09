@@ -588,7 +588,7 @@ func TestSeqCountBackedOperationsAreLazyUntilConsumed(t *testing.T) {
 		if key != 2 {
 			t.Fatalf("groupBy key: %d", key)
 		}
-		if got := group.Collect(); !reflect.DeepEqual(got, []string{"go", "ko"}) {
+		if got := group; !reflect.DeepEqual(got, []string{"go", "ko"}) {
 			t.Fatalf("groupBy group: %#v", got)
 		}
 		break
@@ -1060,15 +1060,15 @@ func TestSeqGroupBy(t *testing.T) {
 		t.Fatalf("got %#v, want %#v", got, want)
 	}
 
-	sizes := grouped.Map(func(key int, group Seq[string]) int {
-		return key + group.Count(func(_ string, _ int) bool { return true })
+	sizes := grouped.Map(func(key int, group []string) int {
+		return key + len(group)
 	}).Collect()
 	if !reflect.DeepEqual(sizes, []int{4, 4}) {
 		t.Fatalf("group map: %#v", sizes)
 	}
 
 	groupMapCalls := 0
-	for item := range grouped.Map(func(key int, _ Seq[string]) int {
+	for item := range grouped.Map(func(key int, _ []string) int {
 		groupMapCalls++
 		return key
 	}) {
@@ -1141,7 +1141,7 @@ func TestSeqMapConversionsAreLazyUntilConsumed(t *testing.T) {
 func TestSeqChunk(t *testing.T) {
 	var got [][]int
 	for chunk := range Slice([]int{1, 2, 3, 4, 5}).Chunk(2) {
-		got = append(got, chunk.Collect())
+		got = append(got, chunk)
 	}
 
 	want := [][]int{{1, 2}, {3, 4}, {5}}
@@ -1152,9 +1152,8 @@ func TestSeqChunk(t *testing.T) {
 
 func TestSeqChunkOuterCanBeChained(t *testing.T) {
 	got := Slice([]int{1, 2, 3, 4}).Chunk(2).
-		Map(func(chunk Seq[int], _ int) int {
-			items := chunk.Collect()
-			return items[0] + items[1]
+		Map(func(chunk []int, _ int) int {
+			return chunk[0] + chunk[1]
 		}).
 		Collect()
 
@@ -1169,9 +1168,9 @@ func TestSeqChunkOuterCanBeChained(t *testing.T) {
 	}
 
 	mapCalls := 0
-	for item := range Slice([]int{1, 2, 3, 4}).Chunk(2).Map(func(chunk Seq[int], _ int) int {
+	for item := range Slice([]int{1, 2, 3, 4}).Chunk(2).Map(func(chunk []int, _ int) int {
 		mapCalls++
-		return len(chunk.Collect())
+		return len(chunk)
 	}) {
 		if item != 2 {
 			t.Fatalf("chunk map first: %d", item)
@@ -1193,7 +1192,7 @@ func TestSeqChunkStopsEarly(t *testing.T) {
 		t.Fatalf("chunk called before consumption: %d", calls)
 	}
 	for chunk := range chunks {
-		if got := chunk.Collect(); !reflect.DeepEqual(got, []int{1, 2}) {
+		if got := chunk; !reflect.DeepEqual(got, []int{1, 2}) {
 			t.Fatalf("chunk: %#v", got)
 		}
 		break
@@ -1205,14 +1204,14 @@ func TestSeqChunkStopsEarly(t *testing.T) {
 
 func TestSeqChunkZeroSizeYieldsNothing(t *testing.T) {
 	for chunk := range Slice([]int{1, 2, 3}).Chunk(0) {
-		t.Fatalf("unexpected chunk: %#v", chunk.Collect())
+		t.Fatalf("unexpected chunk: %#v", chunk)
 	}
 }
 
 func TestSeqWindow(t *testing.T) {
 	var got [][]int
 	for window := range Slice([]int{1, 2, 3, 4}).Window(3, 1) {
-		got = append(got, window.Collect())
+		got = append(got, window)
 	}
 
 	want := [][]int{{1, 2, 3}, {2, 3, 4}}
@@ -1222,7 +1221,7 @@ func TestSeqWindow(t *testing.T) {
 
 	got = nil
 	for window := range Slice([]int{1, 2, 3, 4, 5}).Window(2, 3) {
-		got = append(got, window.Collect())
+		got = append(got, window)
 	}
 
 	want = [][]int{{1, 2}, {4, 5}}
@@ -1233,9 +1232,8 @@ func TestSeqWindow(t *testing.T) {
 
 func TestSeqWindowOuterCanBeChained(t *testing.T) {
 	got := Slice([]int{1, 2, 3, 4}).Window(3, 1).
-		Map(func(window Seq[int], _ int) int {
-			items := window.Collect()
-			return items[0] + items[2]
+		Map(func(window []int, _ int) int {
+			return window[0] + window[2]
 		}).
 		Collect()
 
@@ -1260,7 +1258,7 @@ func TestSeqWindowStopsEarly(t *testing.T) {
 		t.Fatalf("window called before consumption: %d", calls)
 	}
 	for window := range windows {
-		if got := window.Collect(); !reflect.DeepEqual(got, []int{1, 2, 3}) {
+		if got := window; !reflect.DeepEqual(got, []int{1, 2, 3}) {
 			t.Fatalf("window: %#v", got)
 		}
 		break
@@ -1272,9 +1270,9 @@ func TestSeqWindowStopsEarly(t *testing.T) {
 
 func TestSeqWindowZeroSizeYieldsNothing(t *testing.T) {
 	for window := range Slice([]int{1, 2, 3}).Window(0, 1) {
-		t.Fatalf("unexpected window: %#v", window.Collect())
+		t.Fatalf("unexpected window: %#v", window)
 	}
 	for window := range Slice([]int{1, 2, 3}).Window(2, 0) {
-		t.Fatalf("unexpected window: %#v", window.Collect())
+		t.Fatalf("unexpected window: %#v", window)
 	}
 }

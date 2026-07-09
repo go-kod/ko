@@ -10,9 +10,9 @@ type Seq[T any] iter.Seq[T]
 // Seq2 is an iterator-backed sequence type for key/value entries.
 type Seq2[K comparable, V any] iter.Seq2[K, V]
 
-type seqSeq[T any] iter.Seq[Seq[T]]
+type seqSeq[T any] iter.Seq[[]T]
 
-type groupedSeq[K comparable, V any] iter.Seq2[K, Seq[V]]
+type groupedSeq[K comparable, V any] iter.Seq2[K, []V]
 
 type numeric interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64 |

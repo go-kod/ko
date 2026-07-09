@@ -53,7 +53,7 @@ func ExampleSeq_standardLibraryInterop() {
 func ExampleSlice_chunk() {
 	var got [][]int
 	for chunk := range ko.Slice([]int{1, 2, 3, 4, 5}).Chunk(2) {
-		got = append(got, chunk.Collect())
+		got = append(got, chunk)
 	}
 
 	fmt.Println(got)
@@ -63,7 +63,7 @@ func ExampleSlice_chunk() {
 func ExampleSlice_window() {
 	var got [][]int
 	for window := range ko.Slice([]int{1, 2, 3, 4}).Window(3, 1) {
-		got = append(got, window.Collect())
+		got = append(got, window)
 	}
 
 	fmt.Println(got)
@@ -92,9 +92,8 @@ func ExampleSeq_sumBy() {
 
 func ExampleSlice_mapChunks() {
 	got := ko.Slice([]int{1, 2, 3, 4}).Chunk(2).
-		Map(func(chunk ko.Seq[int], _ int) int {
-			items := chunk.Collect()
-			return items[0] + items[1]
+		Map(func(chunk []int, _ int) int {
+			return chunk[0] + chunk[1]
 		}).
 		Collect()
 
