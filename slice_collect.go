@@ -130,7 +130,7 @@ func (c Seq[T]) MinBy[K cmp.Ordered](mapper func(item T, index int) K) (T, bool)
 }
 
 // SumBy sums the mapped numeric values.
-func (c Seq[T]) SumBy[N Numeric](mapper func(item T, index int) N) N {
+func (c Seq[T]) SumBy[N numeric](mapper func(item T, index int) N) N {
 	var sum N
 	i := 0
 	for item := range iter.Seq[T](c) {
@@ -141,7 +141,7 @@ func (c Seq[T]) SumBy[N Numeric](mapper func(item T, index int) N) N {
 }
 
 // MeanBy returns the arithmetic mean of mapped numeric values, or 0 for an empty sequence.
-func (c Seq[T]) MeanBy[N Numeric](mapper func(item T, index int) N) float64 {
+func (c Seq[T]) MeanBy[N numeric](mapper func(item T, index int) N) float64 {
 	var sum N
 	count := 0
 	for item := range iter.Seq[T](c) {

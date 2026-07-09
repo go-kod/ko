@@ -1006,6 +1006,17 @@ func TestSeqToMap(t *testing.T) {
 	if calls != 1 {
 		t.Fatalf("toMap calls: %d", calls)
 	}
+
+	got = Slice([]string{"g", "go", "ko"}).
+		ToMap(func(item string, _ int) (int, string) {
+			return len(item), item
+		}).
+		Collect()
+
+	want = map[int]string{1: "g", 2: "ko"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("duplicate keys got %#v, want %#v", got, want)
+	}
 }
 
 func TestSeqEnumerate(t *testing.T) {
@@ -1084,40 +1095,9 @@ func TestSeqGroupBy(t *testing.T) {
 	}
 }
 
-func TestSeqKeyBy(t *testing.T) {
-	got := Slice([]string{"g", "go", "ko"}).
-		KeyBy(func(item string, _ int) int {
-			return len(item)
-		}).
-		Collect()
-
-	want := map[int]string{1: "g", 2: "ko"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %#v, want %#v", got, want)
-	}
-
-	got = Slice([]string{"go", "ko", "kod"}).
-		KeyBy(func(item string, _ int) int {
-			return len(item)
-		}).
-		Collect()
-
-	want = map[int]string{2: "ko", 3: "kod"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("duplicate keys got %#v, want %#v", got, want)
-	}
-}
-
 func TestSeqMapConversionsStopEarly(t *testing.T) {
 	for range Slice([]string{"go", "ko", "kod"}).
 		GroupBy(func(item string, _ int) int {
-			return len(item)
-		}) {
-		break
-	}
-
-	for range Slice([]string{"go", "ko", "kod"}).
-		KeyBy(func(item string, _ int) int {
 			return len(item)
 		}) {
 		break
@@ -1143,18 +1123,18 @@ func TestSeqMapConversionsAreLazyUntilConsumed(t *testing.T) {
 
 	calls = 0
 	keyed := Slice([]string{"go", "ko", "kod"}).
-		KeyBy(func(item string, _ int) int {
+		ToMap(func(item string, _ int) (int, string) {
 			calls++
-			return len(item)
+			return len(item), item
 		})
 	if calls != 0 {
-		t.Fatalf("keyBy called before consumption: %d", calls)
+		t.Fatalf("toMap called before consumption: %d", calls)
 	}
 	for range keyed {
 		break
 	}
 	if calls != 1 {
-		t.Fatalf("keyBy calls: %d", calls)
+		t.Fatalf("toMap calls: %d", calls)
 	}
 }
 

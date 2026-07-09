@@ -80,6 +80,16 @@ func ExampleSlice_takeRight() {
 	// Output: [3]
 }
 
+func ExampleSeq_sumBy() {
+	got := ko.Slice([]string{"go", "ko", "kod"}).
+		SumBy(func(item string, _ int) int {
+			return len(item)
+		})
+
+	fmt.Println(got)
+	// Output: 7
+}
+
 func ExampleSlice_mapChunks() {
 	got := ko.Slice([]int{1, 2, 3, 4}).Chunk(2).
 		Map(func(chunk ko.Seq[int], _ int) int {

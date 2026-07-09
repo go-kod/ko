@@ -86,7 +86,7 @@ sums := ko.Slice([]int{1, 2, 3, 4}).Chunk(2).
 
 ## Seq to Seq2
 
-Use `ToMap`, `KeyBy`, or `Enumerate` when a `Seq` should become `Seq2`. `GroupBy` returns an unexported grouped adapter whose grouped values are `ko.Seq`; grouped keys are yielded in first-seen order.
+Use `ToMap` or `Enumerate` when a `Seq` should become `Seq2`. `GroupBy` returns an unexported grouped adapter whose grouped values are `ko.Seq`; grouped keys are yielded in first-seen order.
 
 ```go
 byLength := ko.Slice([]string{"go", "ko", "kod"}).
@@ -103,7 +103,6 @@ byLength := ko.Slice([]string{"go", "ko", "kod"}).
 | `ToMap(mapper)` | `Seq2[K, V]` | Mapper returns a key and value. When collected to a map, later duplicate keys replace earlier ones. |
 | `GroupBy(mapper)` | unexported adapter | Groups items by key, preserving first key order. The adapter supports range, `Map`, and `Collect`. |
 | `Enumerate()` | `Seq2[int, T]` | Indexes items by zero-based position. |
-| `KeyBy(mapper)` | `Seq2[K, T]` | Indexes items by key. When collected to a map, later duplicate keys replace earlier ones. |
 
 ## Seq2 Chains
 
@@ -147,7 +146,6 @@ Seq2 methods:
 
 - Predicates and mappers receive the item plus its index for slices.
 - `Slice` accepts any element type. Use `DistinctBy` to remove duplicates by a comparable key.
-- `Numeric` covers integer and floating-point types for numeric aggregate methods such as `SumBy` and `MeanBy`.
 - `Seq2` is an entry stream; duplicate key replacement happens when `Collect` materializes a Go map.
 - Map predicates and mappers receive key and value.
 - Map iteration order follows Go map iteration order, so sort `ToSlice` output in tests when order matters.

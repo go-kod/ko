@@ -87,20 +87,6 @@ func (c Seq[T]) Enumerate() Seq2[int, T] {
 	})
 }
 
-// KeyBy indexes items by a key. Later items replace earlier items with the same key.
-func (c Seq[T]) KeyBy[K comparable](mapper func(item T, index int) K) Seq2[K, T] {
-	return Seq2[K, T](func(yield func(K, T) bool) {
-		i := 0
-		for item := range iter.Seq[T](c) {
-			key := mapper(item, i)
-			i++
-			if !yield(key, item) {
-				return
-			}
-		}
-	})
-}
-
 // GroupBy groups items by key, preserving first key order.
 func (c Seq[T]) GroupBy[K comparable](mapper func(item T, index int) K) groupedSeq[K, T] {
 	return groupedSeq[K, T](func(yield func(K, Seq[T]) bool) {
